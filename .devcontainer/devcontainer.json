@@ -1,6 +1,11 @@
 {
     "name": "hass-meteoam",
     "image": "mcr.microsoft.com/devcontainers/python:3.13",
+    "features": {
+        "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+            "moby": false
+        }
+    },
     "postCreateCommand": "scripts/setup",
     "forwardPorts": [
         8123
@@ -10,6 +15,9 @@
             "label": "Home Assistant",
             "onAutoForward": "notify"
         }
+    },
+    "remoteEnv": {
+        "LOCAL_WORKSPACE_FOLDER": "${localWorkspaceFolder}"
     },
     "customizations": {
         "vscode": {
