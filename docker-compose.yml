@@ -2,8 +2,8 @@ services:
   homeassistant:
     image: ghcr.io/home-assistant/home-assistant:stable
     volumes:
-      - ./config:/config
-      - ./custom_components:/config/custom_components
+      - ${LOCAL_WORKSPACE_FOLDER:-.}/config:/config
+      - ${LOCAL_WORKSPACE_FOLDER:-.}/custom_components:/config/custom_components
     ports:
       - "8123:8123"
     restart: unless-stopped
