@@ -33,9 +33,13 @@ DOMAIN = "meteoam"
 HOME_LOCATION_NAME = "Home"
 
 CONF_TRACK_HOME = "track_home"
+CONF_STATION_OBSERVATIONS = "station_observations"
 
 DEFAULT_HOME_LATITUDE = 41.9027835
 DEFAULT_HOME_LONGITUDE = 12.4963655
+
+# Station observation API (real-time SYNOP/METAR data)
+STATION_URL = "https://api.meteoam.it/deda-ows/api/GetStationRadius/{lat}/{lon}"
 
 CONDITIONS_MAP = {
     ATTR_CONDITION_SUNNY: {"01", "02"},

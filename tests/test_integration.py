@@ -179,3 +179,131 @@ def test_translation_keys_match():
     english = keys(json.loads((folder / "en.json").read_text()))
     for path in folder.glob("*.json"):
         assert keys(json.loads(path.read_text())) == english, path.name
+
+
+@pytest.mark.parametrize("source", ["user", "onboarding"])
+async def test_observation_lifecycle(hass, source):
+    """Observation options create sensors, track home, and unload independently."""
+    from custom_components.meteoam.coordinator import MeteoAMStationData
+
+    async def fetch(data):
+        data.current_weather_data = {
+            "2t": 16,
+            "r": 76,
+            "pmsl": 1022,
+            "wkmh": 4,
+            "wdir": None,
+            "wcar": "VRB",
+        }
+        data.station_attributes = {"station_icao": "LIRU"}
+        return data
+
+    with patch.object(MeteoAMStationData, "fetch_data", fetch):
+        flow = await hass.config_entries.flow.async_init(
+            "meteoam", context={"source": source}
+        )
+        if source == "user":
+            flow = await hass.config_entries.flow.async_configure(
+                flow["flow_id"],
+                {
+                    "name": "Rome",
+                    "latitude": 41.9,
+                    "longitude": 12.5,
+                    "station_observations": True,
+                },
+            )
+        entry = flow["result"]
+        if source == "onboarding":
+            hass.config_entries.async_update_entry(
+                entry, data={**entry.data, "station_observations": True}
+            )
+            await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        station = entry.runtime_data.station
+        registry = er.async_get(hass)
+        entities = er.async_entries_for_config_entry(registry, entry.entry_id)
+        assert len(entities) == 7
+        states = {
+            entity.translation_key: hass.states.get(entity.entity_id)
+            for entity in entities
+            if entity.domain == "sensor"
+        }
+        assert states["observed_temperature"].state == "16"
+        assert states["observed_temperature"].attributes["station_icao"] == "LIRU"
+        assert states["observed_wind_bearing"].state == "unknown"
+        if source == "onboarding":
+            await hass.config.async_update(latitude=45.0, longitude=9.0)
+            await hass.async_block_till_done()
+            assert station.weather._coordinates == {"lat": "45.0", "lon": "9.0"}
+        identities = {(entity.entity_id, entity.unique_id) for entity in entities}
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        assert station._unsub_track_home is None
+        assert identities == {
+            (entity.entity_id, entity.unique_id)
+            for entity in er.async_entries_for_config_entry(registry, entry.entry_id)
+        }
+        station = entry.runtime_data.station
+        options = await hass.config_entries.options.async_init(entry.entry_id)
+        await hass.config_entries.options.async_configure(
+            options["flow_id"],
+            {
+                "name": "Rome",
+                "latitude": 41.9,
+                "longitude": 12.5,
+                "station_observations": False,
+            },
+        )
+        await hass.async_block_till_done()
+        assert entry.runtime_data.station is None
+        assert station._unsub_track_home is None
+        assert all(
+            state.state == "unavailable" for state in hass.states.async_all("sensor")
+        )
+        assert (
+            sum(state.state == "sunny" for state in hass.states.async_all("weather"))
+            == 1
+        )
+
+
+async def test_station_outage_does_not_block_forecast(hass, caplog):
+    """An optional API outage leaves forecasts loaded; sensors recover on refresh."""
+    from custom_components.meteoam.coordinator import (
+        CannotConnectError,
+        MeteoAMStationData,
+    )
+
+    with patch.object(
+        MeteoAMStationData, "fetch_data", side_effect=CannotConnectError("offline")
+    ):
+        flow = await hass.config_entries.flow.async_init(
+            "meteoam", context={"source": "user"}
+        )
+        flow = await hass.config_entries.flow.async_configure(
+            flow["flow_id"],
+            {
+                "name": "Rome",
+                "latitude": 41.9,
+                "longitude": 12.5,
+                "station_observations": True,
+            },
+        )
+        await hass.async_block_till_done()
+    entry = flow["result"]
+    assert entry.state.value == "loaded"
+    assert hass.states.async_all("weather")[0].state == "sunny"
+    assert len(hass.states.async_all("sensor")) == 6
+    assert all(
+        state.state == "unavailable" for state in hass.states.async_all("sensor")
+    )
+    assert "offline" in caplog.text
+    caplog.clear()  # The fixture rejects unexpected HA errors; this one is intentional.
+    station = entry.runtime_data.station
+    data = station.weather
+    data.current_weather_data = {"2t": 18}
+    data.station_attributes = {"station_icao": "LIRU"}
+    with patch.object(MeteoAMStationData, "fetch_data", return_value=data):
+        await station.async_refresh()
+        await hass.async_block_till_done()
+    assert any(state.state == "18" for state in hass.states.async_all("sensor"))
+    assert await hass.config_entries.async_unload(entry.entry_id)

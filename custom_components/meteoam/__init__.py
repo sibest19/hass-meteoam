@@ -9,14 +9,19 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
 from .const import (
+    CONF_STATION_OBSERVATIONS,
     CONF_TRACK_HOME,
     DEFAULT_HOME_LATITUDE,
     DEFAULT_HOME_LONGITUDE,
     DOMAIN,
 )
-from .coordinator import MeteoAMConfigEntry, MeteoAMDataUpdateCoordinator
+from .coordinator import (
+    MeteoAMConfigEntry,
+    MeteoAMDataUpdateCoordinator,
+    MeteoAMStationCoordinator,
+)
 
-PLATFORMS = [Platform.WEATHER]
+PLATFORMS = [Platform.WEATHER, Platform.SENSOR]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,6 +53,14 @@ async def async_setup_entry(
     config_entry.runtime_data = coordinator
 
     config_entry.async_on_unload(coordinator.untrack_home)
+
+    if config_entry.data.get(CONF_STATION_OBSERVATIONS, False):
+        coordinator.station = MeteoAMStationCoordinator(hass, config_entry)
+        # Optional observations must not prevent forecast setup during an outage.
+        await coordinator.station.async_refresh()
+        if config_entry.data.get(CONF_TRACK_HOME, False):
+            coordinator.station.track_home()
+        config_entry.async_on_unload(coordinator.station.untrack_home)
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
