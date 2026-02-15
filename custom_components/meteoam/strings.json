@@ -7,7 +7,11 @@
         "data": {
           "name": "[%key:common::config_flow::data::name%]",
           "latitude": "[%key:common::config_flow::data::latitude%]",
-          "longitude": "[%key:common::config_flow::data::longitude%]"
+          "longitude": "[%key:common::config_flow::data::longitude%]",
+          "station_observations": "Enable station observations"
+        },
+        "data_description": {
+          "station_observations": "Enable real-time weather observations from the nearest METAR/SYNOP station. Creates additional sensor entities that update every 5 minutes."
         }
       }
     },
@@ -17,6 +21,28 @@
     "abort": {
       "no_home": "No home coordinates are set in the Home Assistant configuration",
       "already_configured": "[%key:common::config_flow::abort::already_configured_service%]"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "observed_temperature": {
+        "name": "Observed temperature"
+      },
+      "observed_humidity": {
+        "name": "Observed humidity"
+      },
+      "observed_pressure": {
+        "name": "Observed pressure"
+      },
+      "observed_wind_speed": {
+        "name": "Observed wind speed"
+      },
+      "observed_wind_bearing": {
+        "name": "Observed wind bearing"
+      },
+      "observed_wind_cardinal": {
+        "name": "Observed wind cardinal"
+      }
     }
   },
   "exceptions": {
@@ -31,7 +57,11 @@
         "data": {
           "name": "[%key:common::config_flow::data::name%]",
           "latitude": "[%key:common::config_flow::data::latitude%]",
-          "longitude": "[%key:common::config_flow::data::longitude%]"
+          "longitude": "[%key:common::config_flow::data::longitude%]",
+          "station_observations": "Enable station observations"
+        },
+        "data_description": {
+          "station_observations": "Enable real-time weather observations from the nearest METAR/SYNOP station. Creates additional sensor entities that update every 5 minutes."
         }
       }
     }

@@ -33,7 +33,10 @@ from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import ATTR_MAP, CONDITION_LOOKUP, CONF_TRACK_HOME, DOMAIN, FORECAST_MAP
-from .coordinator import MeteoAMConfigEntry, MeteoAMDataUpdateCoordinator
+from .coordinator import (
+    MeteoAMConfigEntry,
+    MeteoAMDataUpdateCoordinator,
+)
 
 DEFAULT_NAME = "MeteoAM"
 
@@ -44,7 +47,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Add a weather entity from a config_entry."""
-    coordinator = config_entry.runtime_data
+    coordinator = config_entry.runtime_data.forecast
     entity_registry = er.async_get(hass)
 
     name: str | None
@@ -108,6 +111,7 @@ class MeteoAMWeather(SingleCoordinatorWeatherEntity[MeteoAMDataUpdateCoordinator
         super().__init__(coordinator)
         self._attr_unique_id = _calculate_unique_id(config_entry.data, False)
         self._config = config_entry.data
+        self._config_entry = config_entry
         self._attr_device_info = DeviceInfo(
             name="Forecast",
             entry_type=DeviceEntryType.SERVICE,
@@ -166,6 +170,19 @@ class MeteoAMWeather(SingleCoordinatorWeatherEntity[MeteoAMDataUpdateCoordinator
     def precipitation_probability(self) -> float | None:
         """Return the precipitation probability."""
         return self.coordinator.data.current_weather_data.get("tpp")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return station metadata as extra attributes."""
+        station = self._config_entry.runtime_data.station
+        if station is None or station.data is None:
+            return {}
+        attrs: dict[str, Any] = {}
+        if station.data.station_name:
+            attrs["station_name"] = station.data.station_name
+        if station.data.station_icao:
+            attrs["station_icao"] = station.data.station_icao
+        return attrs
 
     def _forecast(self, hourly: bool) -> list[Forecast] | None:
         """Return the forecast array."""
