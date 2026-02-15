@@ -182,4 +182,10 @@ The `config/` directory is gitignored except for the seed `configuration.yaml`. 
 
 ## Credits
 
+This project is a fork of the original [hass-meteoam](https://github.com/wilds/hass-meteoam) by [@wilds](https://github.com/wilds). Huge thanks for building the foundation of this integration.
+
 Weather data provided by [Aeronautica Militare](https://www.meteoam.it) — the Italian Air Force meteorological service.
+
+## Disclaimer
+
+This is an **unofficial** custom component and is **not affiliated with, endorsed by, or connected to** Aeronautica Militare, MeteoAM, or any related entity. All registered trademarks, service marks, and brand names are the property of their respective owners.
