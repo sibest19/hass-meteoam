@@ -1,1 +1,29 @@
-__pycache__
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+
+# Linting / testing
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Home Assistant runtime config
+config/*
+!config/configuration.yaml
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# OS
+.DS_Store
+Thumbs.db

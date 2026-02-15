@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -e
+
+cd "$(dirname "$0")/.."
+
+# Install uv if not available
+if ! command -v uv &>/dev/null; then
+	echo "Installing uv..."
+	curl -LsSf https://astral.sh/uv/install.sh | sh
+	export PATH="$HOME/.local/bin:$PATH"
+fi
+
+echo "Syncing dependencies with uv..."
+uv sync
+
+echo "Installing pre-commit hooks..."
+uv run pre-commit install
+
+echo ""
+echo "Setup complete! Available commands:"
+echo "  make ha          - Start Home Assistant (docker)"
+echo "  make lint        - Run ruff linter"
+echo "  make format      - Format code with ruff"
+echo "  make test        - Run tests"
+echo "  make ha-logs     - Follow HA logs"
+echo "  make ha-restart  - Restart HA container"

@@ -37,7 +37,8 @@ A Home Assistant custom component that provides weather data from the Italian Ai
 
 ## Requirements
 
-- Home Assistant **2025.1** or newer
+- Home Assistant **2025.2** or newer
+- Python **3.13** or newer
 
 ## Installation
 
@@ -76,6 +77,108 @@ Weather forecast data is fetched from the MeteoAM API (`api.meteoam.it`), which 
 - **Hourly forecast**: up to ~4 days ahead (hourly for 3 days, then 3-hourly)
 - **Daily forecast**: up to 5 days ahead with min/max temperatures
 - **Update interval**: approximately every 60 minutes (randomized 55–65 min)
+
+## Development
+
+### Prerequisites
+
+- [uv](https://docs.astral.sh/uv/) — fast Python package manager
+- [Docker](https://www.docker.com/) — for running Home Assistant locally
+
+### Quick Start
+
+```bash
+# 1. Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# or: brew install uv
+
+# 2. Clone the repo
+git clone https://github.com/sibest19/hass-meteoam.git
+cd hass-meteoam
+
+# 3. Install dependencies and pre-commit hooks
+make setup
+
+# 4. Start Home Assistant
+make ha
+# Open http://localhost:8123 and set up your instance
+# The meteoam integration is already available under Settings → Devices & Services
+```
+
+### Project Structure
+
+```
+hass-meteoam/
+├── custom_components/
+│   └── meteoam/            # The integration source code
+│       ├── __init__.py      # Integration setup & teardown
+│       ├── config_flow.py   # Config & options flow UI
+│       ├── const.py         # Constants, condition maps
+│       ├── coordinator.py   # Data update coordinator (API calls)
+│       ├── manifest.json    # Integration metadata
+│       ├── strings.json     # UI strings / translations
+│       └── weather.py       # Weather entity platform
+├── config/                  # HA runtime config (gitignored, except seed)
+│   └── configuration.yaml   # Seed HA configuration
+├── scripts/
+│   └── setup                # One-command dev environment setup
+├── .devcontainer/
+│   └── devcontainer.json    # VS Code devcontainer config
+├── docker-compose.yml       # Runs HA with custom_components mounted
+├── pyproject.toml           # Project config: deps, ruff, pytest
+├── Makefile                 # Dev workflow commands
+└── .pre-commit-config.yaml  # Pre-commit hooks (ruff)
+```
+
+### Make Commands
+
+| Command | Description |
+|---------|-------------|
+| `make help` | Show all available commands |
+| `make setup` | Install dev dependencies and pre-commit hooks |
+| `make lint` | Run ruff linter on source code |
+| `make format` | Auto-format code with ruff |
+| `make test` | Run tests with pytest |
+| `make ha` | Start Home Assistant via Docker (http://localhost:8123) |
+| `make ha-stop` | Stop the Home Assistant container |
+| `make ha-restart` | Restart HA to pick up code changes |
+| `make ha-logs` | Follow Home Assistant logs |
+| `make clean` | Remove caches and build artifacts |
+
+### Development Workflow
+
+1. **Start HA** — `make ha` launches a Home Assistant instance with your `custom_components/` directory mounted. Any file changes to your integration are immediately available inside the container.
+
+2. **Edit code** — Make changes to files in `custom_components/meteoam/`.
+
+3. **Restart to apply** — Run `make ha-restart` to restart Home Assistant and load your changes. Check `make ha-logs` for errors.
+
+4. **Lint & format** — Run `make lint` to check for issues, `make format` to auto-fix formatting. Pre-commit hooks run these automatically on `git commit`.
+
+5. **Test** — Run `make test` to execute the test suite.
+
+### Tooling
+
+| Tool | Purpose |
+|------|---------|
+| [uv](https://docs.astral.sh/uv/) | Python dependency management (replaces pip/poetry) |
+| [Ruff](https://docs.astral.sh/ruff/) | Linting & formatting (replaces flake8, black, isort) |
+| [pytest](https://docs.pytest.org/) | Test framework |
+| [pytest-homeassistant-custom-component](https://github.com/MatthewFlamworthy/pytest-homeassistant-custom-component) | HA test fixtures and mocks |
+| [pre-commit](https://pre-commit.com/) | Git hook manager for automated checks |
+
+### VS Code Devcontainer
+
+This repo includes a [devcontainer](.devcontainer/devcontainer.json) configuration. When you open the project in VS Code (or GitHub Codespaces), you'll be prompted to **Reopen in Container** — this gives you a fully configured Python environment with Ruff, Pylance, and all dependencies pre-installed.
+
+### Docker Setup Details
+
+The `docker-compose.yml` runs the official Home Assistant container with two volume mounts:
+
+- `./config` → `/config` — HA configuration directory (persisted locally)
+- `./custom_components` → `/config/custom_components` — your integration code (live-mounted)
+
+The `config/` directory is gitignored except for the seed `configuration.yaml`. After first run, HA will create its database, auth, and other files there.
 
 ## Credits
 

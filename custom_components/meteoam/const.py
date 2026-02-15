@@ -70,3 +70,8 @@ ATTR_MAP = {
     ATTR_WEATHER_WIND_BEARING: "wdir",
     ATTR_WEATHER_WIND_SPEED: "wkmh",
 }
+
+# Reverse lookup: icon code -> HA condition (built once at import time)
+CONDITION_LOOKUP: dict[str, str] = {
+    code: condition for condition, codes in CONDITIONS_MAP.items() for code in codes
+}

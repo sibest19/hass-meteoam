@@ -7,16 +7,17 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.weather import (
     ATTR_FORECAST_CONDITION,
-    ATTR_FORECAST_TIME,
     ATTR_WEATHER_HUMIDITY,
     ATTR_WEATHER_PRESSURE,
     ATTR_WEATHER_TEMPERATURE,
     ATTR_WEATHER_WIND_BEARING,
     ATTR_WEATHER_WIND_SPEED,
-    DOMAIN as WEATHER_DOMAIN,
     Forecast,
     SingleCoordinatorWeatherEntity,
     WeatherEntityFeature,
+)
+from homeassistant.components.weather import (
+    DOMAIN as WEATHER_DOMAIN,
 )
 from homeassistant.const import (
     CONF_LATITUDE,
@@ -31,7 +32,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import ATTR_MAP, CONDITIONS_MAP, CONF_TRACK_HOME, DOMAIN, FORECAST_MAP
+from .const import ATTR_MAP, CONDITION_LOOKUP, CONF_TRACK_HOME, DOMAIN, FORECAST_MAP
 from .coordinator import MeteoAMConfigEntry, MeteoAMDataUpdateCoordinator
 
 DEFAULT_NAME = "MeteoAM"
@@ -79,11 +80,8 @@ def _calculate_unique_id(config: Mapping[str, Any], hourly: bool) -> str:
 
 
 def format_condition(condition: str) -> str:
-    """Return condition from dict CONDITIONS_MAP."""
-    for key, value in CONDITIONS_MAP.items():
-        if condition in value:
-            return key
-    return condition
+    """Return condition from CONDITION_LOOKUP."""
+    return CONDITION_LOOKUP.get(condition, condition)
 
 
 class MeteoAMWeather(SingleCoordinatorWeatherEntity[MeteoAMDataUpdateCoordinator]):
@@ -175,20 +173,18 @@ class MeteoAMWeather(SingleCoordinatorWeatherEntity[MeteoAMDataUpdateCoordinator
             raw_forecast = self.coordinator.data.hourly_forecast
         else:
             raw_forecast = self.coordinator.data.daily_forecast
-        required_keys = {"2t", "localDateTime"}
         ha_forecast: list[Forecast] = []
         for raw_item in raw_forecast:
-            if not set(raw_item).issuperset(required_keys):
+            if "2t" not in raw_item or "localDateTime" not in raw_item:
                 continue
             ha_item = {
                 k: raw_item[v]
                 for k, v in FORECAST_MAP.items()
                 if raw_item.get(v) is not None
             }
-            if ha_item.get(ATTR_FORECAST_CONDITION):
-                ha_item[ATTR_FORECAST_CONDITION] = format_condition(
-                    ha_item[ATTR_FORECAST_CONDITION]
-                )
+            condition = ha_item.get(ATTR_FORECAST_CONDITION)
+            if condition:
+                ha_item[ATTR_FORECAST_CONDITION] = format_condition(condition)
             ha_forecast.append(ha_item)  # type: ignore[arg-type]
         return ha_forecast
 

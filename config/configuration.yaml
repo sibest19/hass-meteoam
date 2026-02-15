@@ -1,0 +1,7 @@
+# Loads default set of integrations. Do not remove.
+default_config:
+
+logger:
+  default: warning
+  logs:
+    custom_components.meteoam: debug

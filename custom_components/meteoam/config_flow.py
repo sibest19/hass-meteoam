@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -43,7 +42,8 @@ def _get_data_schema(
     hass: HomeAssistant, config_entry: ConfigEntry | None = None
 ) -> vol.Schema:
     """Get a schema with default values."""
-    # If tracking home or no config entry is passed in, default values come from Home location
+    # If tracking home or no config entry is passed in,
+    # default values come from Home location
     if config_entry is None or config_entry.data.get(CONF_TRACK_HOME, False):
         return vol.Schema(
             {
