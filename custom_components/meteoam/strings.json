@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "[%key:common::config_flow::data::location%]",
-        "description": "Meteo Aereonautica Militare",
+        "description": "Meteo Aeronautica Militare",
         "data": {
           "name": "[%key:common::config_flow::data::name%]",
           "latitude": "[%key:common::config_flow::data::latitude%]",
@@ -17,6 +17,11 @@
     "abort": {
       "no_home": "No home coordinates are set in the Home Assistant configuration",
       "already_configured": "[%key:common::config_flow::abort::already_configured_service%]"
+    }
+  },
+  "exceptions": {
+    "update_failed": {
+      "message": "Update of data from MeteoAM failed: {error}"
     }
   },
   "options": {

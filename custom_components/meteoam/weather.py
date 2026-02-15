@@ -1,32 +1,27 @@
 """Support for MeteoAM weather service."""
+
 from __future__ import annotations
 
-from types import MappingProxyType
-from typing import Any
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.weather import (
     ATTR_FORECAST_CONDITION,
-    ATTR_WEATHER_CLOUD_COVERAGE,
-    ATTR_WEATHER_DEW_POINT,
+    ATTR_FORECAST_TIME,
     ATTR_WEATHER_HUMIDITY,
     ATTR_WEATHER_PRESSURE,
     ATTR_WEATHER_TEMPERATURE,
     ATTR_WEATHER_WIND_BEARING,
-    ATTR_WEATHER_WIND_GUST_SPEED,
     ATTR_WEATHER_WIND_SPEED,
-)
-from homeassistant.components.weather import DOMAIN as WEATHER_DOMAIN
-from homeassistant.components.weather import (
+    DOMAIN as WEATHER_DOMAIN,
     Forecast,
     SingleCoordinatorWeatherEntity,
     WeatherEntityFeature,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_LATITUDE,
     CONF_LONGITUDE,
     CONF_NAME,
-    UnitOfPrecipitationDepth,
     UnitOfPressure,
     UnitOfSpeed,
     UnitOfTemperature,
@@ -34,46 +29,45 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.util.unit_system import METRIC_SYSTEM
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import MeteoAMDataUpdateCoordinator
 from .const import ATTR_MAP, CONDITIONS_MAP, CONF_TRACK_HOME, DOMAIN, FORECAST_MAP
+from .coordinator import MeteoAMConfigEntry, MeteoAMDataUpdateCoordinator
 
 DEFAULT_NAME = "MeteoAM"
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    config_entry: MeteoAMConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Add a weather entity from a config_entry."""
-    coordinator: MeteoAMDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator = config_entry.runtime_data
     entity_registry = er.async_get(hass)
 
-    entities = [
-        MeteoAMWeather(
-            coordinator, config_entry.data, hass.config.units is METRIC_SYSTEM, False
-        )
-    ]
+    name: str | None
+    if config_entry.data.get(CONF_TRACK_HOME, False):
+        name = hass.config.location_name
+    else:
+        name = config_entry.data.get(CONF_NAME, DEFAULT_NAME)
+        if TYPE_CHECKING:
+            assert isinstance(name, str)
 
-    # Add hourly entity to legacy config entries
-    if entity_registry.async_get_entity_id(
+    entities = [MeteoAMWeather(coordinator, config_entry, name)]
+
+    # Remove hourly entity from legacy config entries
+    if hourly_entity_id := entity_registry.async_get_entity_id(
         WEATHER_DOMAIN,
         DOMAIN,
         _calculate_unique_id(config_entry.data, True),
     ):
-        entities.append(
-            MeteoAMWeather(
-                coordinator, config_entry.data, hass.config.units is METRIC_SYSTEM, True
-            )
-        )
+        entity_registry.async_remove(hourly_entity_id)
 
     async_add_entities(entities)
 
 
-def _calculate_unique_id(config: MappingProxyType[str, Any], hourly: bool) -> str:
+def _calculate_unique_id(config: Mapping[str, Any], hourly: bool) -> str:
     """Calculate unique ID."""
     name_appendix = ""
     if hourly:
@@ -96,11 +90,10 @@ class MeteoAMWeather(SingleCoordinatorWeatherEntity[MeteoAMDataUpdateCoordinator
     """Implementation of a MeteoAM weather condition."""
 
     _attr_attribution = (
-        "Weather forecast from meteoam.it, delivered by the Aereonautica Militare."
+        "Weather forecast from meteoam.it, delivered by the Aeronautica Militare."
     )
     _attr_has_entity_name = True
     _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_native_precipitation_unit = UnitOfPrecipitationDepth.MILLIMETERS
     _attr_native_pressure_unit = UnitOfPressure.HPA
     _attr_native_wind_speed_unit = UnitOfSpeed.KILOMETERS_PER_HOUR
     _attr_supported_features = (
@@ -110,42 +103,23 @@ class MeteoAMWeather(SingleCoordinatorWeatherEntity[MeteoAMDataUpdateCoordinator
     def __init__(
         self,
         coordinator: MeteoAMDataUpdateCoordinator,
-        config: MappingProxyType[str, Any],
-        is_metric: bool,
-        hourly: bool,
+        config_entry: MeteoAMConfigEntry,
+        name: str,
     ) -> None:
         """Initialise the platform with a data instance and site."""
         super().__init__(coordinator)
-        self._attr_unique_id = _calculate_unique_id(config, hourly)
-        self._config = config
-        self._is_metric = is_metric
-        self._hourly = hourly
-
-    @property
-    def track_home(self) -> Any | bool:
-        """Return if we are tracking home."""
-        return self._config.get(CONF_TRACK_HOME, False)
-
-    @property
-    def name(self) -> str:
-        """Return the name of the sensor."""
-        name = self._config.get(CONF_NAME)
-        name_appendix = ""
-        if self._hourly:
-            name_appendix = " hourly"
-
-        if name is not None:
-            return f"{name}{name_appendix}"
-
-        if self.track_home:
-            return f"{self.hass.config.location_name}{name_appendix}"
-
-        return f"{DEFAULT_NAME}{name_appendix}"
-
-    @property
-    def entity_registry_enabled_default(self) -> bool:
-        """Return if the entity should be enabled when first added to the entity registry."""
-        return not self._hourly
+        self._attr_unique_id = _calculate_unique_id(config_entry.data, False)
+        self._config = config_entry.data
+        self._attr_device_info = DeviceInfo(
+            name="Forecast",
+            entry_type=DeviceEntryType.SERVICE,
+            identifiers={(DOMAIN, config_entry.entry_id)},
+            manufacturer="MeteoAM",
+            model="Forecast",
+            configuration_url="https://www.meteoam.it",
+        )
+        self._attr_track_home = self._config.get(CONF_TRACK_HOME, False)
+        self._attr_name = name
 
     @property
     def condition(self) -> str | None:
@@ -191,25 +165,9 @@ class MeteoAMWeather(SingleCoordinatorWeatherEntity[MeteoAMDataUpdateCoordinator
         )
 
     @property
-    def native_wind_gust_speed(self) -> float | None:
-        """Return the wind gust speed in native units."""
-        return self.coordinator.data.current_weather_data.get(
-            ATTR_MAP[ATTR_WEATHER_WIND_GUST_SPEED]
-        )
-
-    @property
-    def cloud_coverage(self) -> float | None:
-        """Return the cloud coverage."""
-        return self.coordinator.data.current_weather_data.get(
-            ATTR_MAP[ATTR_WEATHER_CLOUD_COVERAGE]
-        )
-
-    @property
-    def native_dew_point(self) -> float | None:
-        """Return the dew point."""
-        return self.coordinator.data.current_weather_data.get(
-            ATTR_MAP[ATTR_WEATHER_DEW_POINT]
-        )
+    def precipitation_probability(self) -> float | None:
+        """Return the precipitation probability."""
+        return self.coordinator.data.current_weather_data.get("tpp")
 
     def _forecast(self, hourly: bool) -> list[Forecast] | None:
         """Return the forecast array."""
@@ -234,11 +192,6 @@ class MeteoAMWeather(SingleCoordinatorWeatherEntity[MeteoAMDataUpdateCoordinator
             ha_forecast.append(ha_item)  # type: ignore[arg-type]
         return ha_forecast
 
-    @property
-    def forecast(self) -> list[Forecast] | None:
-        """Return the forecast array."""
-        return self._forecast(self._hourly)
-
     @callback
     def _async_forecast_daily(self) -> list[Forecast] | None:
         """Return the daily forecast in native units."""
@@ -248,15 +201,3 @@ class MeteoAMWeather(SingleCoordinatorWeatherEntity[MeteoAMDataUpdateCoordinator
     def _async_forecast_hourly(self) -> list[Forecast] | None:
         """Return the hourly forecast in native units."""
         return self._forecast(True)
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Device info."""
-        return DeviceInfo(
-            name="Forecast",
-            entry_type=DeviceEntryType.SERVICE,
-            identifiers={(DOMAIN,)},  # type: ignore[arg-type]
-            manufacturer="MeteoAM",
-            model="Forecast",
-            configuration_url="https://www.meteoam.it",
-        )

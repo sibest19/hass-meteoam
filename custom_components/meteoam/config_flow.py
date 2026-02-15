@@ -1,14 +1,20 @@
 """Config flow to configure MeteoAM component."""
+
 from __future__ import annotations
 
 from typing import Any
 
-import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-from homeassistant import config_entries
+
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlowWithReload,
+)
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE, CONF_NAME
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import config_validation as cv
 
 from .const import (
     CONF_TRACK_HOME,
@@ -34,10 +40,10 @@ def configured_instances(hass: HomeAssistant) -> set[str]:
 
 
 def _get_data_schema(
-    hass: HomeAssistant, config_entry: config_entries.ConfigEntry | None = None
+    hass: HomeAssistant, config_entry: ConfigEntry | None = None
 ) -> vol.Schema:
     """Get a schema with default values."""
-    # If tracking home or no config entry is passed in, default value come from Home location
+    # If tracking home or no config entry is passed in, default values come from Home location
     if config_entry is None or config_entry.data.get(CONF_TRACK_HOME, False):
         return vol.Schema(
             {
@@ -62,20 +68,16 @@ def _get_data_schema(
     )
 
 
-class MeteoAMConfigFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
+class MeteoAMConfigFlowHandler(ConfigFlow, domain=DOMAIN):
     """Config flow for MeteoAM component."""
 
     VERSION = 1
 
-    def __init__(self) -> None:
-        """Init MeteoAMConfigFlowHandler."""
-        self._errors: dict[str, Any] = {}
-
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle a flow initialized by the user."""
-        self._errors = {}
+        errors: dict[str, str] = {}
 
         if user_input is not None:
             if (
@@ -85,17 +87,17 @@ class MeteoAMConfigFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(
                     title=user_input[CONF_NAME], data=user_input
                 )
-            self._errors[CONF_NAME] = "already_configured"
+            errors[CONF_NAME] = "already_configured"
 
         return self.async_show_form(
             step_id="user",
             data_schema=_get_data_schema(self.hass),
-            errors=self._errors,
+            errors=errors,
         )
 
     async def async_step_onboarding(
         self, data: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle a flow initialized by onboarding."""
         # Don't create entry if latitude or longitude isn't set.
         # Also, filters out our onboarding default location.
@@ -112,36 +114,29 @@ class MeteoAMConfigFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
-    ) -> config_entries.OptionsFlow:
+        config_entry: ConfigEntry,
+    ) -> MeteoAMOptionsFlowHandler:
         """Get the options flow for MeteoAM."""
-        return MeteoAMOptionsFlowHandler(config_entry)
+        return MeteoAMOptionsFlowHandler()
 
 
-class MeteoAMOptionsFlowHandler(config_entries.OptionsFlow):
+class MeteoAMOptionsFlowHandler(OptionsFlowWithReload):
     """Options flow for MeteoAM component."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize the MeteoAM OptionsFlow."""
-        self._config_entry = config_entry
-        self._errors: dict[str, Any] = {}
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Configure options for MeteoAM."""
-
         if user_input is not None:
             # Update config entry with data from user input
             self.hass.config_entries.async_update_entry(
-                self._config_entry, data=user_input
+                self.config_entry, data=user_input
             )
             return self.async_create_entry(
-                title=self._config_entry.title, data=user_input
+                title=self.config_entry.title, data=user_input
             )
 
         return self.async_show_form(
             step_id="init",
-            data_schema=_get_data_schema(self.hass, config_entry=self._config_entry),
-            errors=self._errors,
+            data_schema=_get_data_schema(self.hass, config_entry=self.config_entry),
         )

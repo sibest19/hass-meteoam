@@ -1,12 +1,14 @@
 {
   "domain": "meteoam",
-  "name": "Meteo Aereonautica Militare (MeteoAM)",
-  "codeowners": ["@wilds"],
+  "name": "Meteo Aeronautica Militare (MeteoAM)",
+  "codeowners": [
+    "@sibest19"
+  ],
   "config_flow": true,
-  "dependencies": [],
-  "documentation": "https://github.com/wilds/hass-meteoam",
-  "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/wilds/hass-meteoam/issues",
+  "documentation": "https://github.com/sibest19/hass-meteoam",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/sibest19/hass-meteoam/issues",
   "requirements": [],
-  "version": "1.0.0"
+  "version": "2.0.0"
 }
