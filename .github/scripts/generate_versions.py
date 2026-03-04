@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import urllib.request
-from datetime import datetime
+from datetime import UTC, datetime
 
 import matplotlib.pyplot as plt
 
@@ -95,7 +95,7 @@ def main():
     latest_count = versions.get(latest, 0)
     latest_pct = (latest_count / total * 100) if total else 0
 
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = datetime.now(tz=UTC).strftime("%Y-%m-%d")
 
     history = load_history()
 
