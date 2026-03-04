@@ -1,0 +1,56 @@
+name: Update Version History
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # daily at 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install dependencies
+        run: pip install matplotlib
+
+      - name: Prepare version-history branch
+        run: |
+          git fetch origin
+
+          if git ls-remote --exit-code --heads origin version-history; then
+            echo "Branch exists remotely. Checking it out."
+            git switch --force-create version-history origin/version-history
+          else
+            echo "Branch does not exist. Creating it."
+            git switch --create version-history
+          fi
+
+      - name: Generate history + chart
+        run: python .github/scripts/generate_versions.py
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          git add history.json versions.md adoption_trend.svg
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update version history"
+            git push origin version-history
+          fi
