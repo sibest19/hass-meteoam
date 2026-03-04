@@ -1,8 +1,8 @@
 # Meteo Aeronautica Militare (MeteoAM) Integration for Home Assistant
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg?&style=plastic)](https://github.com/hacs/integration)
 ![GitHub Release](https://img.shields.io/github/v/release/sibest19/hass-meteoam?sort=semver&display_name=release&style=plastic&link=https%3A%2F%2Fgithub.com%2Fsibest19%2Fhass-meteoam%2Freleases%2Flatest)
-![Installation Count](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=integration%20usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.meteoam.total)
+![Installation Count](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&style=plastic&label=integration%20usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.meteoam.total)
 
 A Home Assistant custom component that provides weather data from the Italian Air Force meteorological service ([Aeronautica Militare](https://www.meteoam.it)).
 
