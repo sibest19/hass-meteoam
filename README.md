@@ -78,6 +78,11 @@ Weather forecast data is fetched from the MeteoAM API (`api.meteoam.it`), which 
 - **Daily forecast**: up to 5 days ahead with min/max temperatures
 - **Update interval**: approximately every 60 minutes (randomized 55–65 min)
 
+## Version Adoption
+
+- [Current Distribution](https://github.com/sibest19/hass-meteoam/blob/version-history/versions.md)
+- ![Adoption Trend](https://raw.githubusercontent.com/sibest19/hass-meteoam/version-history/adoption_trend.svg)
+
 ## Development
 
 ### Prerequisites
