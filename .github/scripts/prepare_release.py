@@ -38,9 +38,13 @@ def get_last_tag() -> str | None:
     return None
 
 
+# Separator unlikely to appear in commit messages
+_COMMIT_SEP = "---commit-boundary---"
+
+
 def get_commits_since(tag: str | None) -> list[str]:
-    """Get commit messages since a tag (or all if no tag)."""
-    cmd = ["git", "log", "--pretty=format:%s"]
+    """Get full commit messages since a tag (or all if no tag)."""
+    cmd = ["git", "log", f"--pretty=format:%B{_COMMIT_SEP}"]
     if tag:
         cmd.append(f"{tag}..HEAD")
     result = subprocess.run(  # noqa: S603
@@ -49,16 +53,25 @@ def get_commits_since(tag: str | None) -> list[str]:
         text=True,
         check=True,
     )
-    return [line for line in result.stdout.strip().splitlines() if line]
+    return [msg.strip() for msg in result.stdout.split(_COMMIT_SEP) if msg.strip()]
+
+
+def _subject(full_message: str) -> str:
+    """Extract the subject (first non-empty line) from a full commit message."""
+    for line in full_message.splitlines():
+        if line.strip():
+            return line.strip()
+    return full_message.strip()
 
 
 def determine_bump(commits: list[str]) -> str:
     """Determine major/minor/build from conventional commit messages."""
     has_feat = False
-    for msg in commits:
-        if BREAKING_RE.search(msg):
+    for full_msg in commits:
+        subject = _subject(full_msg)
+        if BREAKING_RE.search(subject) or BREAKING_RE.search(full_msg):
             return "major"
-        if FEAT_RE.match(msg):
+        if FEAT_RE.match(subject):
             has_feat = True
     return "minor" if has_feat else "build"
 
@@ -100,15 +113,16 @@ def generate_release_notes(commits: list[str], new_version: str) -> str:
     fixes = []
     other = []
 
-    for msg in commits:
-        if BREAKING_RE.search(msg):
-            breaking.append(msg)
-        elif FEAT_RE.match(msg):
-            features.append(msg)
-        elif FIX_RE.match(msg):
-            fixes.append(msg)
+    for full_msg in commits:
+        subject = _subject(full_msg)
+        if BREAKING_RE.search(subject) or BREAKING_RE.search(full_msg):
+            breaking.append(subject)
+        elif FEAT_RE.match(subject):
+            features.append(subject)
+        elif FIX_RE.match(subject):
+            fixes.append(subject)
         else:
-            other.append(msg)
+            other.append(subject)
 
     sections = []
     sections.append(f"## v{new_version}\n")
