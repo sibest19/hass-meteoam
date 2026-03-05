@@ -4,11 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       bump_override:
-        description: "Override bump type (leave empty to auto-detect from commits)"
+        description: "Override bump type (auto = detect from commits)"
         required: false
         type: choice
+        default: auto
         options:
-          - ""
+          - auto
           - build
           - minor
           - major
@@ -34,7 +35,12 @@ jobs:
       - name: Prepare release
         id: prep
         run: |
-          python .github/scripts/prepare_release.py ${{ inputs.bump_override }}
+          BUMP="${{ inputs.bump_override }}"
+          if [ "$BUMP" = "auto" ]; then
+            python .github/scripts/prepare_release.py
+          else
+            python .github/scripts/prepare_release.py "$BUMP"
+          fi
 
       - name: Commit version bump
         run: |
