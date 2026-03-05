@@ -103,6 +103,12 @@ def update_pyproject(new_version: str) -> None:
         count=1,
         flags=re.MULTILINE,
     )
+    if updated == content:
+        msg = (
+            f"Failed to update version in {PYPROJECT}: "
+            f"no version field matched for {new_version}"
+        )
+        raise RuntimeError(msg)
     PYPROJECT.write_text(updated)
 
 
