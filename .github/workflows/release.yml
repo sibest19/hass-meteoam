@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_override:
+        description: "Override bump type (auto = detect from commits)"
+        required: false
+        type: choice
+        default: auto
+        options:
+          - auto
+          - build
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Prepare release
+        id: prep
+        run: |
+          BUMP="${{ inputs.bump_override }}"
+          if [ "$BUMP" = "auto" ]; then
+            python .github/scripts/prepare_release.py
+          else
+            python .github/scripts/prepare_release.py "$BUMP"
+          fi
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add custom_components/meteoam/manifest.json pyproject.toml
+          git commit -m "release: v${{ steps.prep.outputs.new_version }}"
+          git push
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: ${{ steps.prep.outputs.release_notes }}
+        run: |
+          printf '%s' "$RELEASE_NOTES" > release_notes.md
+          gh release create "v${{ steps.prep.outputs.new_version }}" \
+            --title "v${{ steps.prep.outputs.new_version }}" \
+            --notes-file release_notes.md
