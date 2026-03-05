@@ -53,7 +53,9 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: ${{ steps.prep.outputs.release_notes }}
         run: |
+          printf '%s' "$RELEASE_NOTES" > release_notes.md
           gh release create "v${{ steps.prep.outputs.new_version }}" \
             --title "v${{ steps.prep.outputs.new_version }}" \
-            --notes "${{ steps.prep.outputs.release_notes }}"
+            --notes-file release_notes.md
