@@ -13,7 +13,7 @@ permissions: {}
 
 jobs:
   validate-hacs:
-    runs-on: "ubuntu-24.04-arm"
+    runs-on: "ubuntu-latest"
     steps:
       - name: HACS validation
         uses: "hacs/action@main"
