@@ -21,8 +21,8 @@ A Home Assistant custom component that provides weather data from the Italian Ai
 |-----------|-----------|-------------|
 | 01, 02 | Sunny | Clear sky / mostly clear |
 | 03, 13, 14 | Fog | Fog / mist / haze |
-| 04 | Partly cloudy | Partially covered sky |
-| 05, 06, 07 | Cloudy | Overcast / mostly cloudy |
+| 04, 05 | Partly cloudy | Partially covered sky / mostly cloudy |
+| 06, 07 | Cloudy | Overcast |
 | 08 | Rainy | Rain |
 | 09, 15 | Pouring | Heavy rain |
 | 10 | Lightning & rain | Thunderstorm with rain |
@@ -33,7 +33,7 @@ A Home Assistant custom component that provides weather data from the Italian Ai
 | 31 | Clear night | Clear sky at night |
 | 32, 33 | Fog (night) | Slight fog / fog at night |
 | 34, 35 | Partly cloudy (night) | Partially covered sky at night |
-| 36 | Cloudy (night) | Overcast with haze at night |
+| 36 | Cloudy (night) | Overcast at night |
 
 ## Requirements
 
