@@ -31,8 +31,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          BODY="${{ github.event.pull_request.body }}"
-          printf '%s' "$BODY" > release_notes.md
+          gh pr view "${{ github.event.pull_request.number }}" --json body -q '.body' > release_notes.md
           gh release create "v${VERSION}" \
             --title "v${VERSION}" \
             --notes-file release_notes.md
