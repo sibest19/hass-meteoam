@@ -9,14 +9,18 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
 from .const import (
+    CONF_STATION_OBSERVATIONS,
     CONF_TRACK_HOME,
     DEFAULT_HOME_LATITUDE,
     DEFAULT_HOME_LONGITUDE,
     DOMAIN,
 )
-from .coordinator import MeteoAMConfigEntry, MeteoAMDataUpdateCoordinator
-
-PLATFORMS = [Platform.WEATHER]
+from .coordinator import (
+    MeteoAMConfigEntry,
+    MeteoAMDataUpdateCoordinator,
+    MeteoAMRuntimeData,
+    MeteoAMStationCoordinator,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,11 +49,30 @@ async def async_setup_entry(
     if config_entry.data.get(CONF_TRACK_HOME, False):
         coordinator.track_home()
 
-    config_entry.runtime_data = coordinator
-
     config_entry.async_on_unload(coordinator.untrack_home)
 
-    await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
+    # Conditionally set up station observations
+    station_coordinator: MeteoAMStationCoordinator | None = None
+    if config_entry.data.get(CONF_STATION_OBSERVATIONS, False):
+        station_coordinator = MeteoAMStationCoordinator(hass, config_entry)
+        await station_coordinator.async_config_entry_first_refresh()
+
+        if config_entry.data.get(CONF_TRACK_HOME, False):
+            station_coordinator.track_home()
+
+        config_entry.async_on_unload(station_coordinator.untrack_home)
+
+    config_entry.runtime_data = MeteoAMRuntimeData(
+        forecast=coordinator,
+        station=station_coordinator,
+    )
+
+    # Build platform list dynamically
+    platforms: list[Platform] = [Platform.WEATHER]
+    if station_coordinator is not None:
+        platforms.append(Platform.SENSOR)
+
+    await hass.config_entries.async_forward_entry_setups(config_entry, platforms)
 
     await _cleanup_old_device(hass)
 
@@ -60,7 +83,26 @@ async def async_unload_entry(
     hass: HomeAssistant, config_entry: MeteoAMConfigEntry
 ) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(config_entry, PLATFORMS)
+    platforms: list[Platform] = [Platform.WEATHER]
+    if config_entry.runtime_data.station is not None:
+        platforms.append(Platform.SENSOR)
+    return await hass.config_entries.async_unload_platforms(config_entry, platforms)
+
+
+async def async_migrate_entry(
+    hass: HomeAssistant, config_entry: MeteoAMConfigEntry
+) -> bool:
+    """Migrate old config entry to new version."""
+    _LOGGER.debug("Migrating from version %s", config_entry.version)
+
+    if config_entry.version < 2:
+        new_data = {**config_entry.data, CONF_STATION_OBSERVATIONS: False}
+        hass.config_entries.async_update_entry(
+            config_entry, data=new_data, version=2
+        )
+        _LOGGER.info("Migration to version 2 successful")
+
+    return True
 
 
 async def _cleanup_old_device(hass: HomeAssistant) -> None:

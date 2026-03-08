@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
+    CONF_STATION_OBSERVATIONS,
     CONF_TRACK_HOME,
     DEFAULT_HOME_LATITUDE,
     DEFAULT_HOME_LONGITUDE,
@@ -52,6 +53,12 @@ def _get_data_schema(
                 vol.Required(
                     CONF_LONGITUDE, default=hass.config.longitude
                 ): cv.longitude,
+                vol.Optional(
+                    CONF_STATION_OBSERVATIONS,
+                    default=config_entry.data.get(CONF_STATION_OBSERVATIONS, False)
+                    if config_entry
+                    else False,
+                ): bool,
             }
         )
     # Not tracking home, default values come from config entry
@@ -64,6 +71,10 @@ def _get_data_schema(
             vol.Required(
                 CONF_LONGITUDE, default=config_entry.data.get(CONF_LONGITUDE)
             ): cv.longitude,
+            vol.Optional(
+                CONF_STATION_OBSERVATIONS,
+                default=config_entry.data.get(CONF_STATION_OBSERVATIONS, False),
+            ): bool,
         }
     )
 
@@ -71,7 +82,7 @@ def _get_data_schema(
 class MeteoAMConfigFlowHandler(ConfigFlow, domain=DOMAIN):
     """Config flow for MeteoAM component."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
