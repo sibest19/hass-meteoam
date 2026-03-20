@@ -142,6 +142,8 @@ class MeteoAMWeatherData:
             raise CannotConnectError(f"API returned status {resp.status}")
 
         data = await resp.json()
+        if not data:
+            raise CannotConnectError("API returned empty response")
 
         # Parse daily forecast from stats
         self.daily_forecast = []
