@@ -53,6 +53,15 @@ jobs:
 
           git config user.name "github-actions"
           git config user.email "actions@github.com"
+
+          # Clean up any leftover branch/PR from a previous run
+          EXISTING_PR=$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number' || true)
+          if [ -n "$EXISTING_PR" ]; then
+            gh pr close "$EXISTING_PR" --delete-branch
+          else
+            git push origin --delete "$BRANCH" 2>/dev/null || true
+          fi
+
           git checkout -b "$BRANCH"
           git add custom_components/meteoam/manifest.json pyproject.toml
           git commit -m "release: v${VERSION}"
