@@ -112,7 +112,15 @@ def update_pyproject(new_version: str) -> None:
     PYPROJECT.write_text(updated)
 
 
-def generate_release_notes(commits: list[str], new_version: str) -> str:
+def _get_repo_url() -> str:
+    """Read the repository URL from manifest.json."""
+    data = json.loads(MANIFEST.read_text())
+    return data["documentation"].rstrip("/")
+
+
+def generate_release_notes(
+    commits: list[str], new_version: str, last_tag: str | None
+) -> str:
     """Generate markdown release notes grouped by type."""
     breaking = []
     features = []
@@ -131,7 +139,6 @@ def generate_release_notes(commits: list[str], new_version: str) -> str:
             other.append(subject)
 
     sections = []
-    sections.append(f"## v{new_version}\n")
 
     if breaking:
         sections.append("### Breaking Changes")
@@ -152,6 +159,13 @@ def generate_release_notes(commits: list[str], new_version: str) -> str:
         sections.append("### Other Changes")
         sections.extend(f"- {m}" for m in other)
         sections.append("")
+
+    repo_url = _get_repo_url()
+    old_ref = last_tag or "initial"
+    sections.append(
+        f"**Full Changelog**: {repo_url}/compare/{old_ref}...v{new_version}"
+    )
+    sections.append("")
 
     return "\n".join(sections)
 
@@ -192,7 +206,7 @@ def main() -> None:
     update_manifest(new_version)
     update_pyproject(new_version)
 
-    notes = generate_release_notes(commits, new_version)
+    notes = generate_release_notes(commits, new_version, last_tag)
 
     # Output summary
     since = last_tag or "beginning"
