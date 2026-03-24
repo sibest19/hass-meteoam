@@ -161,6 +161,7 @@ class MeteoAMWeatherData:
 
         # Parse hourly forecast from timeseries
         hourly_forecast: list[dict] = []
+        new_current_weather_data: dict[str, Any] = {}
         timeseries_data = data["timeseries"]
         paramlist_data = data["paramlist"]
         datasets = data["datasets"]["0"]
@@ -174,16 +175,28 @@ class MeteoAMWeatherData:
             tidx_str = str(tidx)
 
             if local_dt <= now:
-                # Build current weather data (no isoformat needed)
+                # Build current weather data from latest past entry
                 element: dict[str, Any] = {"localDateTime": local_dt.isoformat()}
                 for pidx, p in enumerate(paramlist_data):
                     element[p] = datasets[str(pidx)][tidx_str]
-                self.current_weather_data = element
+                new_current_weather_data = element
             if local_dt >= now:
                 element = {"localDateTime": local_dt.isoformat()}
                 for pidx, p in enumerate(paramlist_data):
                     element[p] = datasets[str(pidx)][tidx_str]
                 hourly_forecast.append(element)
+
+        if new_current_weather_data:
+            self.current_weather_data = new_current_weather_data
+        elif hourly_forecast:
+            # No past data available: fall back to the nearest future entry so
+            # that current conditions remain available when the API only returns
+            # future timestamps (e.g. query happens before the first data point).
+            _LOGGER.debug(
+                "No past timeseries entry found; using nearest future entry"
+                " as current conditions"
+            )
+            self.current_weather_data = hourly_forecast[0]
 
         self.hourly_forecast = hourly_forecast
         return self

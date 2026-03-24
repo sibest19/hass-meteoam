@@ -1569,7 +1569,7 @@ wheels = [
 
 [[package]]
 name = "hass-meteoam"
-version = "2.0.0"
+version = "2.0.2"
 source = { virtual = "." }
 
 [package.dev-dependencies]
