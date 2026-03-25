@@ -26,6 +26,14 @@ from .const import CONF_TRACK_HOME, DOMAIN
 # Dedicated Home Assistant endpoint - do not change!
 URL = "https://api.meteoam.it/deda-meteograms/api/GetMeteogram/preset1/{lat},{lon}"
 
+# Station observations endpoint — note the path uses separate segments (lat/lon)
+STATION_URL = "https://api.meteoam.it/deda-ows/api/GetStationRadius/{lat}/{lon}"
+STATION_HEADERS = {
+    "Origin": "https://www.meteoam.it",
+    "Referer": "https://www.meteoam.it/",
+    "Accept": "application/json",
+}
+
 _LOGGER = logging.getLogger(__name__)
 
 type MeteoAMConfigEntry = ConfigEntry[MeteoAMDataUpdateCoordinator]
@@ -199,4 +207,70 @@ class MeteoAMWeatherData:
             self.current_weather_data = hourly_forecast[0]
 
         self.hourly_forecast = hourly_forecast
+
+        # Enrich current conditions with real station observations when available.
+        # Station observations are actual SYNOP/METAR measurements that reflect
+        # real-time weather changes. Falls back to forecast-based current data
+        # when the station API is unavailable. Station data does not include
+        # condition codes (icon) or precipitation probability (tpp), so those
+        # are merged from the nearest hourly forecast entry.
+        station_obs = await self._fetch_station_observation(timeout)
+        if station_obs:
+            if hourly_forecast:
+                for key in ("icon", "tpp"):
+                    val = hourly_forecast[0].get(key)
+                    if val is not None:
+                        station_obs.setdefault(key, val)
+            self.current_weather_data = station_obs
+
         return self
+
+    async def _fetch_station_observation(
+        self, timeout: aiohttp.ClientTimeout
+    ) -> dict[str, Any] | None:
+        """Fetch the latest real weather observation from GetStationRadius API."""
+        if self._coordinates is None or self._session is None:
+            return None
+
+        url = STATION_URL.format(
+            lat=self._coordinates["lat"],
+            lon=self._coordinates["lon"],
+        )
+        _LOGGER.debug("Fetching MeteoAM station data from %s", url)
+
+        try:
+            resp = await self._session.get(
+                url, timeout=timeout, headers=STATION_HEADERS
+            )
+            if resp.status != 200:
+                _LOGGER.debug("Station API returned status %s", resp.status)
+                return None
+
+            data = await resp.json(content_type=None)
+            if not data:
+                return None
+
+            # Station timeseries is a nested array [["ts1", "ts2", ...]] with
+            # timestamps in reverse chronological order (newest first).
+            timeseries = data["timeseries"][0]
+            if not isinstance(timeseries, list) or not timeseries:
+                return None
+
+            paramlist = data["paramlist"]
+            datasets = data["datasets"]["0"]
+
+            # Index "0" → latest observation (reverse chronological order)
+            obs: dict[str, Any] = {"localDateTime": timeseries[0]}
+            for pidx, p in enumerate(paramlist):
+                val = datasets.get(str(pidx), {}).get("0")
+                if val is None:
+                    continue
+                # wdir can be "VRB" (variable wind) — skip non-numeric values
+                if p == "wdir" and not isinstance(val, (int, float)):
+                    continue
+                obs[p] = val
+
+            return obs if len(obs) > 1 else None
+        except Exception:
+            _LOGGER.debug("Failed to fetch station observation", exc_info=True)
+            return None
