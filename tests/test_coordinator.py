@@ -115,9 +115,11 @@ class TestFetchDataNetworkErrors:
         """Invalid JSON response should be caught as CannotConnectError."""
         wd = _make_weather_data(hass_mock)
         resp = _mock_response(status=200)
-        resp.json = AsyncMock(side_effect=aiohttp.ContentTypeError(
-            MagicMock(), MagicMock(), message="not json"
-        ))
+        resp.json = AsyncMock(
+            side_effect=aiohttp.ContentTypeError(
+                MagicMock(), MagicMock(), message="not json"
+            )
+        )
         wd._session.get = AsyncMock(return_value=resp)
 
         with pytest.raises(CannotConnectError, match="Error parsing"):

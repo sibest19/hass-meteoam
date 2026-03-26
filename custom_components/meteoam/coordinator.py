@@ -140,9 +140,7 @@ class MeteoAMWeatherData:
         try:
             resp = await self._session.get(url, timeout=timeout)
         except (aiohttp.ClientError, TimeoutError) as err:
-            raise CannotConnectError(
-                f"Error connecting to MeteoAM API: {err}"
-            ) from err
+            raise CannotConnectError(f"Error connecting to MeteoAM API: {err}") from err
 
         if resp.status != 200:
             raise CannotConnectError(f"API returned status {resp.status}")
