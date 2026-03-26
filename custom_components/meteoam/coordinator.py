@@ -137,14 +137,37 @@ class MeteoAMWeatherData:
         _LOGGER.debug("Fetching MeteoAM data from %s", url)
 
         timeout = aiohttp.ClientTimeout(total=60)
-        resp = await self._session.get(url, timeout=timeout)
+        try:
+            resp = await self._session.get(url, timeout=timeout)
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise CannotConnectError(
+                f"Error connecting to MeteoAM API: {err}"
+            ) from err
+
         if resp.status != 200:
             raise CannotConnectError(f"API returned status {resp.status}")
 
-        data = await resp.json()
+        try:
+            data = await resp.json()
+        except (aiohttp.ContentTypeError, ValueError) as err:
+            raise CannotConnectError(
+                f"Error parsing MeteoAM API response: {err}"
+            ) from err
+
         if not data:
             raise CannotConnectError("API returned empty response")
 
+        try:
+            self._parse_data(data)
+        except (KeyError, IndexError, TypeError) as err:
+            raise CannotConnectError(
+                f"Error processing MeteoAM API data: {err}"
+            ) from err
+
+        return self
+
+    def _parse_data(self, data: dict[str, Any]) -> None:
+        """Parse the API response data."""
         # Parse daily forecast from stats
         self.daily_forecast = []
         for item in data["extrainfo"]["stats"]:
@@ -166,6 +189,8 @@ class MeteoAMWeatherData:
         datasets = data["datasets"]["0"]
         now = dt_util.now()
 
+        current_weather_data: dict[str, Any] = {}
+
         for tidx, t in enumerate(timeseries_data):
             parsed_dt = dt_util.parse_datetime(t)
             if parsed_dt is None:
@@ -178,12 +203,16 @@ class MeteoAMWeatherData:
                 element: dict[str, Any] = {"localDateTime": local_dt.isoformat()}
                 for pidx, p in enumerate(paramlist_data):
                     element[p] = datasets[str(pidx)][tidx_str]
-                self.current_weather_data = element
+                current_weather_data = element
             if local_dt >= now:
                 element = {"localDateTime": local_dt.isoformat()}
                 for pidx, p in enumerate(paramlist_data):
                     element[p] = datasets[str(pidx)][tidx_str]
                 hourly_forecast.append(element)
 
+        # Fall back to the nearest future entry if no current weather data
+        if not current_weather_data and hourly_forecast:
+            current_weather_data = hourly_forecast[0]
+
+        self.current_weather_data = current_weather_data
         self.hourly_forecast = hourly_forecast
-        return self
