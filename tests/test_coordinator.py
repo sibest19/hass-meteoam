@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
@@ -13,6 +13,8 @@ from custom_components.meteoam.coordinator import (
     CannotConnectError,
     MeteoAMWeatherData,
 )
+
+_SLEEP = "custom_components.meteoam.coordinator.asyncio.sleep"
 
 # --- Helpers for building fake API responses ---
 
@@ -85,7 +87,10 @@ def hass_mock():
 class TestFetchDataNetworkErrors:
     """Tests for network error handling in fetch_data."""
 
-    async def test_aiohttp_client_error_raises_cannot_connect(self, hass_mock):
+    @patch(_SLEEP, new_callable=AsyncMock)
+    async def test_aiohttp_client_error_raises_cannot_connect(
+        self, _mock_sleep, hass_mock
+    ):
         """aiohttp.ClientError should be caught and re-raised as CannotConnectError."""
         wd = _make_weather_data(hass_mock)
         wd._session.get = AsyncMock(
@@ -95,7 +100,8 @@ class TestFetchDataNetworkErrors:
         with pytest.raises(CannotConnectError, match="Error connecting"):
             await wd.fetch_data()
 
-    async def test_timeout_error_raises_cannot_connect(self, hass_mock):
+    @patch(_SLEEP, new_callable=AsyncMock)
+    async def test_timeout_error_raises_cannot_connect(self, _mock_sleep, hass_mock):
         """TimeoutError should be caught and re-raised as CannotConnectError."""
         wd = _make_weather_data(hass_mock)
         wd._session.get = AsyncMock(side_effect=TimeoutError("timed out"))
@@ -103,7 +109,8 @@ class TestFetchDataNetworkErrors:
         with pytest.raises(CannotConnectError, match="Error connecting"):
             await wd.fetch_data()
 
-    async def test_non_200_status_raises_cannot_connect(self, hass_mock):
+    @patch(_SLEEP, new_callable=AsyncMock)
+    async def test_non_200_status_raises_cannot_connect(self, _mock_sleep, hass_mock):
         """Non-200 HTTP status should raise CannotConnectError."""
         wd = _make_weather_data(hass_mock)
         wd._session.get = AsyncMock(return_value=_mock_response(status=503))
@@ -280,3 +287,98 @@ class TestFetchDataPreconditions:
 
         with pytest.raises(RuntimeError, match="Session not initialized"):
             await wd.fetch_data()
+
+
+class TestRetryBehavior:
+    """Tests for retry logic on transient errors."""
+
+    @patch(_SLEEP, new_callable=AsyncMock)
+    async def test_retry_on_server_error_then_success(self, mock_sleep, hass_mock):
+        """A 504 on first attempt followed by 200 should succeed."""
+        now = dt_util.now()
+        past = (now - timedelta(hours=1)).isoformat()
+        future = (now + timedelta(hours=1)).isoformat()
+        data = _build_api_response(timeseries=[past, future])
+
+        fail_resp = _mock_response(status=504)
+        ok_resp = _mock_response(status=200, json_data=data)
+
+        wd = _make_weather_data(hass_mock)
+        wd._session.get = AsyncMock(side_effect=[fail_resp, ok_resp])
+
+        await wd.fetch_data()
+        assert wd.current_weather_data
+        assert mock_sleep.call_count == 1
+
+    @patch(_SLEEP, new_callable=AsyncMock)
+    async def test_retry_on_connection_error_then_success(self, mock_sleep, hass_mock):
+        """Connection error on first attempt followed by success should work."""
+        now = dt_util.now()
+        past = (now - timedelta(hours=1)).isoformat()
+        data = _build_api_response(timeseries=[past])
+
+        ok_resp = _mock_response(status=200, json_data=data)
+
+        wd = _make_weather_data(hass_mock)
+        wd._session.get = AsyncMock(
+            side_effect=[aiohttp.ClientConnectionError("refused"), ok_resp]
+        )
+
+        await wd.fetch_data()
+        assert wd.current_weather_data
+        assert mock_sleep.call_count == 1
+
+    @patch(_SLEEP, new_callable=AsyncMock)
+    async def test_retry_exhausted_on_server_errors(self, mock_sleep, hass_mock):
+        """All retries failing with 5xx should raise CannotConnectError."""
+        wd = _make_weather_data(hass_mock)
+        wd._session.get = AsyncMock(
+            side_effect=[
+                _mock_response(status=502),
+                _mock_response(status=503),
+                _mock_response(status=504),
+            ]
+        )
+
+        with pytest.raises(CannotConnectError, match="API returned status 504"):
+            await wd.fetch_data()
+        assert mock_sleep.call_count == 2  # retried twice before final failure
+
+    @patch(_SLEEP, new_callable=AsyncMock)
+    async def test_retry_exhausted_on_connection_errors(self, mock_sleep, hass_mock):
+        """All retries failing with connection errors should raise."""
+        wd = _make_weather_data(hass_mock)
+        wd._session.get = AsyncMock(
+            side_effect=aiohttp.ClientConnectionError("refused")
+        )
+
+        with pytest.raises(CannotConnectError, match="Error connecting"):
+            await wd.fetch_data()
+        assert mock_sleep.call_count == 2
+
+    @patch(_SLEEP, new_callable=AsyncMock)
+    async def test_no_retry_on_client_error_status(self, mock_sleep, hass_mock):
+        """Client errors (4xx) should not be retried."""
+        wd = _make_weather_data(hass_mock)
+        wd._session.get = AsyncMock(return_value=_mock_response(status=404))
+
+        with pytest.raises(CannotConnectError, match="API returned status 404"):
+            await wd.fetch_data()
+        assert mock_sleep.call_count == 0
+
+
+class TestCachedDataFallback:
+    """Tests for _async_update_data cached data fallback."""
+
+    async def test_update_failed_raised_without_cached_data(self, hass_mock):
+        """UpdateFailed should be raised when there's no cached data."""
+        # Directly test that fetch_data still raises when the API fails;
+        # _async_update_data would convert this to UpdateFailed when
+        # no cached data is available.
+        weather = _make_weather_data(hass_mock)
+        weather._session.get = AsyncMock(
+            return_value=_mock_response(status=404)
+        )
+
+        with pytest.raises(CannotConnectError):
+            await weather.fetch_data()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 from collections.abc import Callable, Mapping
@@ -25,6 +26,9 @@ from .const import CONF_TRACK_HOME, DOMAIN
 
 # Dedicated Home Assistant endpoint - do not change!
 URL = "https://api.meteoam.it/deda-meteograms/api/GetMeteogram/preset1/{lat},{lon}"
+
+MAX_RETRIES = 3
+RETRY_DELAY = 5  # seconds
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +65,11 @@ class MeteoAMDataUpdateCoordinator(DataUpdateCoordinator["MeteoAMWeatherData"]):
         try:
             return await self.weather.fetch_data()
         except CannotConnectError as err:
+            if self.data is not None:
+                _LOGGER.warning(
+                    "Error fetching MeteoAM data: %s; using cached data", err
+                )
+                return self.data
             raise UpdateFailed(
                 translation_domain=DOMAIN,
                 translation_key="update_failed",
@@ -137,13 +146,48 @@ class MeteoAMWeatherData:
         _LOGGER.debug("Fetching MeteoAM data from %s", url)
 
         timeout = aiohttp.ClientTimeout(total=60)
-        try:
-            resp = await self._session.get(url, timeout=timeout)
-        except (aiohttp.ClientError, TimeoutError) as err:
-            raise CannotConnectError(f"Error connecting to MeteoAM API: {err}") from err
+        last_err: CannotConnectError | None = None
 
-        if resp.status != 200:
-            raise CannotConnectError(f"API returned status {resp.status}")
+        for attempt in range(MAX_RETRIES):
+            try:
+                resp = await self._session.get(url, timeout=timeout)
+            except (aiohttp.ClientError, TimeoutError) as err:
+                last_err = CannotConnectError(
+                    f"Error connecting to MeteoAM API: {err}"
+                )
+                last_err.__cause__ = err
+                if attempt < MAX_RETRIES - 1:
+                    _LOGGER.debug(
+                        "Transient error on attempt %d/%d, retrying in %ds: %s",
+                        attempt + 1,
+                        MAX_RETRIES,
+                        RETRY_DELAY,
+                        err,
+                    )
+                    await asyncio.sleep(RETRY_DELAY)
+                    continue
+                raise last_err from err
+
+            if resp.status >= 500:
+                last_err = CannotConnectError(
+                    f"API returned status {resp.status}"
+                )
+                if attempt < MAX_RETRIES - 1:
+                    _LOGGER.debug(
+                        "Server error %d on attempt %d/%d, retrying in %ds",
+                        resp.status,
+                        attempt + 1,
+                        MAX_RETRIES,
+                        RETRY_DELAY,
+                    )
+                    await asyncio.sleep(RETRY_DELAY)
+                    continue
+                raise last_err
+
+            if resp.status != 200:
+                raise CannotConnectError(f"API returned status {resp.status}")
+
+            break
 
         try:
             data = await resp.json()
