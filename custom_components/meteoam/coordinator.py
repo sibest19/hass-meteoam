@@ -146,16 +146,11 @@ class MeteoAMWeatherData:
         _LOGGER.debug("Fetching MeteoAM data from %s", url)
 
         timeout = aiohttp.ClientTimeout(total=60)
-        last_err: CannotConnectError | None = None
 
         for attempt in range(MAX_RETRIES):
             try:
                 resp = await self._session.get(url, timeout=timeout)
             except (aiohttp.ClientError, TimeoutError) as err:
-                last_err = CannotConnectError(
-                    f"Error connecting to MeteoAM API: {err}"
-                )
-                last_err.__cause__ = err
                 if attempt < MAX_RETRIES - 1:
                     _LOGGER.debug(
                         "Transient error on attempt %d/%d, retrying in %ds: %s",
@@ -166,12 +161,11 @@ class MeteoAMWeatherData:
                     )
                     await asyncio.sleep(RETRY_DELAY)
                     continue
-                raise last_err from err
+                raise CannotConnectError(
+                    f"Error connecting to MeteoAM API: {err}"
+                ) from err
 
             if resp.status >= 500:
-                last_err = CannotConnectError(
-                    f"API returned status {resp.status}"
-                )
                 if attempt < MAX_RETRIES - 1:
                     _LOGGER.debug(
                         "Server error %d on attempt %d/%d, retrying in %ds",
@@ -182,7 +176,9 @@ class MeteoAMWeatherData:
                     )
                     await asyncio.sleep(RETRY_DELAY)
                     continue
-                raise last_err
+                raise CannotConnectError(
+                    f"API returned status {resp.status}"
+                )
 
             if resp.status != 200:
                 raise CannotConnectError(f"API returned status {resp.status}")

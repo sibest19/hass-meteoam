@@ -368,13 +368,10 @@ class TestRetryBehavior:
 
 
 class TestCachedDataFallback:
-    """Tests for _async_update_data cached data fallback."""
+    """Tests for cached data fallback behavior."""
 
-    async def test_update_failed_raised_without_cached_data(self, hass_mock):
-        """UpdateFailed should be raised when there's no cached data."""
-        # Directly test that fetch_data still raises when the API fails;
-        # _async_update_data would convert this to UpdateFailed when
-        # no cached data is available.
+    async def test_fetch_data_raises_on_client_error(self, hass_mock):
+        """fetch_data raises CannotConnectError on non-retryable errors."""
         weather = _make_weather_data(hass_mock)
         weather._session.get = AsyncMock(
             return_value=_mock_response(status=404)
