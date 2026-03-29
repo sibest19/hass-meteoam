@@ -11,7 +11,7 @@
   "packageRules": [
     {
       "description": "Group Python dev dependencies",
-      "matchManagers": ["pep621"],
+      "matchManagers": ["uv"],
       "matchDepTypes": ["dev"],
       "groupName": "Python dev dependencies"
     },
