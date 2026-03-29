@@ -10,6 +10,12 @@
   },
   "packageRules": [
     {
+      "description": "Group Python dependencies",
+      "matchManagers": ["uv"],
+      "matchDepTypes": ["dependencies"],
+      "groupName": "Python dependencies"
+    },
+    {
       "description": "Group Python dev dependencies",
       "matchManagers": ["uv"],
       "matchDepTypes": ["dev"],
