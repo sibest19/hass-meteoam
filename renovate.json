@@ -5,6 +5,9 @@
   ],
   "automerge": false,
   "dependencyDashboard": true,
+  "lockFileMaintenance": {
+    "enabled": true
+  },
   "packageRules": [
     {
       "description": "Group Python dev dependencies",
