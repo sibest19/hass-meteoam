@@ -1,0 +1,35 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "automerge": false,
+  "dependencyDashboard": true,
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "Group Python dependencies",
+      "matchManagers": ["uv"],
+      "matchDepTypes": ["dependencies"],
+      "groupName": "Python dependencies"
+    },
+    {
+      "description": "Group Python dev dependencies",
+      "matchManagers": ["uv"],
+      "matchDepTypes": ["dev"],
+      "groupName": "Python dev dependencies"
+    },
+    {
+      "description": "Group GitHub Actions",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions"
+    },
+    {
+      "description": "Group pre-commit hooks",
+      "matchManagers": ["pre-commit"],
+      "groupName": "pre-commit hooks"
+    }
+  ]
+}
