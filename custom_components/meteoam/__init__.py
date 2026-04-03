@@ -51,7 +51,7 @@ async def async_setup_entry(
 
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
-    await _cleanup_old_device(hass)
+    await cleanup_old_device(hass)
 
     return True
 
@@ -63,7 +63,7 @@ async def async_unload_entry(
     return await hass.config_entries.async_unload_platforms(config_entry, PLATFORMS)
 
 
-async def _cleanup_old_device(hass: HomeAssistant) -> None:
+async def cleanup_old_device(hass: HomeAssistant) -> None:
     """Cleanup device without proper device identifier."""
     device_reg = dr.async_get(hass)
     device = device_reg.async_get_device(identifiers={(DOMAIN,)})  # type: ignore[arg-type]

@@ -173,7 +173,7 @@ class MeteoAMWeatherData:
             if parsed_dt is None:
                 continue
             element = {
-                "localDateTime": parsed_dt,
+                "localDateTime": parsed_dt.isoformat(),
                 "2t": item["maxCelsius"],
                 "2t_min": item["minCelsius"],
                 "icon": item["icon"],
@@ -196,16 +196,13 @@ class MeteoAMWeatherData:
             local_dt = dt_util.as_local(parsed_dt)
             tidx_str = str(tidx)
 
+            element: dict[str, Any] = {"localDateTime": local_dt.isoformat()}
+            for pidx, p in enumerate(paramlist_data):
+                element[p] = datasets[str(pidx)][tidx_str]
+
             if local_dt <= now:
-                # Build current weather data (no isoformat needed)
-                element: dict[str, Any] = {"localDateTime": local_dt.isoformat()}
-                for pidx, p in enumerate(paramlist_data):
-                    element[p] = datasets[str(pidx)][tidx_str]
                 current_weather_data = element
             if local_dt >= now:
-                element = {"localDateTime": local_dt.isoformat()}
-                for pidx, p in enumerate(paramlist_data):
-                    element[p] = datasets[str(pidx)][tidx_str]
                 hourly_forecast.append(element)
 
         # Fall back to the nearest future entry if no current weather data
