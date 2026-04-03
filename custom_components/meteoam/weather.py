@@ -79,9 +79,9 @@ def _calculate_unique_id(config: Mapping[str, Any], hourly: bool) -> str:
     return f"{config[CONF_LATITUDE]}-{config[CONF_LONGITUDE]}{name_appendix}"
 
 
-def format_condition(condition: str) -> str:
-    """Return condition from CONDITION_LOOKUP."""
-    return CONDITION_LOOKUP.get(condition, condition)
+def format_condition(condition: str) -> str | None:
+    """Return condition from CONDITION_LOOKUP, or None if unrecognised."""
+    return CONDITION_LOOKUP.get(condition)
 
 
 class MeteoAMWeather(SingleCoordinatorWeatherEntity[MeteoAMDataUpdateCoordinator]):
@@ -184,7 +184,11 @@ class MeteoAMWeather(SingleCoordinatorWeatherEntity[MeteoAMDataUpdateCoordinator
             }
             condition = ha_item.get(ATTR_FORECAST_CONDITION)
             if condition:
-                ha_item[ATTR_FORECAST_CONDITION] = format_condition(condition)
+                formatted = format_condition(condition)
+                if formatted is not None:
+                    ha_item[ATTR_FORECAST_CONDITION] = formatted
+                else:
+                    del ha_item[ATTR_FORECAST_CONDITION]
             ha_forecast.append(ha_item)  # type: ignore[arg-type]
         return ha_forecast
 

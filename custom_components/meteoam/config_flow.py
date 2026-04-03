@@ -101,7 +101,7 @@ class MeteoAMConfigFlowHandler(ConfigFlow, domain=DOMAIN):
         """Handle a flow initialized by onboarding."""
         # Don't create entry if latitude or longitude isn't set.
         # Also, filters out our onboarding default location.
-        if (not self.hass.config.latitude and not self.hass.config.longitude) or (
+        if (self.hass.config.latitude == 0 and self.hass.config.longitude == 0) or (
             self.hass.config.latitude == DEFAULT_HOME_LATITUDE
             and self.hass.config.longitude == DEFAULT_HOME_LONGITUDE
         ):
@@ -128,13 +128,12 @@ class MeteoAMOptionsFlowHandler(OptionsFlowWithReload):
     ) -> ConfigFlowResult:
         """Configure options for MeteoAM."""
         if user_input is not None:
-            # Update config entry with data from user input
+            # Merge with existing data to preserve flags like track_home
+            new_data = {**self.config_entry.data, **user_input}
             self.hass.config_entries.async_update_entry(
-                self.config_entry, data=user_input
+                self.config_entry, data=new_data
             )
-            return self.async_create_entry(
-                title=self.config_entry.title, data=user_input
-            )
+            return self.async_create_entry(title=self.config_entry.title, data=new_data)
 
         return self.async_show_form(
             step_id="init",

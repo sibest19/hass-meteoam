@@ -28,7 +28,7 @@ async def async_setup_entry(
     # Don't setup if tracking home location and latitude or longitude isn't set.
     # Also, filters out our onboarding default location.
     if config_entry.data.get(CONF_TRACK_HOME, False) and (
-        (not hass.config.latitude and not hass.config.longitude)
+        (hass.config.latitude == 0 and hass.config.longitude == 0)
         or (
             hass.config.latitude == DEFAULT_HOME_LATITUDE
             and hass.config.longitude == DEFAULT_HOME_LONGITUDE
@@ -42,10 +42,10 @@ async def async_setup_entry(
     coordinator = MeteoAMDataUpdateCoordinator(hass, config_entry)
     await coordinator.async_config_entry_first_refresh()
 
+    config_entry.runtime_data = coordinator
+
     if config_entry.data.get(CONF_TRACK_HOME, False):
         coordinator.track_home()
-
-    config_entry.runtime_data = coordinator
 
     config_entry.async_on_unload(coordinator.untrack_home)
 
