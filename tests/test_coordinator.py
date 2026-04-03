@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
@@ -280,3 +280,87 @@ class TestFetchDataPreconditions:
 
         with pytest.raises(RuntimeError, match="Session not initialized"):
             await wd.fetch_data()
+
+
+class TestSetCoordinates:
+    """Tests for set_coordinates change detection."""
+
+    def test_returns_true_on_first_call(self, hass_mock):
+        """set_coordinates should return True when coordinates are first set."""
+        config = {"latitude": 41.9, "longitude": 12.5}
+        wd = MeteoAMWeatherData(hass_mock, config)
+        with patch(
+            "custom_components.meteoam.coordinator.async_get_clientsession",
+            return_value=MagicMock(),
+        ):
+            assert wd.set_coordinates() is True
+
+    def test_returns_false_when_coordinates_unchanged(self, hass_mock):
+        """set_coordinates should return False if coordinates have not changed."""
+        config = {"latitude": 41.9, "longitude": 12.5}
+        wd = MeteoAMWeatherData(hass_mock, config)
+        with patch(
+            "custom_components.meteoam.coordinator.async_get_clientsession",
+            return_value=MagicMock(),
+        ):
+            wd.set_coordinates()
+            assert wd.set_coordinates() is False
+
+    def test_returns_true_when_coordinates_change(self, hass_mock):
+        """set_coordinates should return True when coordinates change."""
+        hass_mock.config.latitude = 48.85
+        hass_mock.config.longitude = 2.35
+        config = {"track_home": True}
+        wd = MeteoAMWeatherData(hass_mock, config)
+        wd._coordinates = {"lat": "41.9", "lon": "12.5"}  # stale coordinates
+        with patch(
+            "custom_components.meteoam.coordinator.async_get_clientsession",
+            return_value=MagicMock(),
+        ):
+            assert wd.set_coordinates() is True
+
+    def test_track_home_uses_hass_config(self, hass_mock):
+        """set_coordinates with track_home should read from hass.config."""
+        hass_mock.config.latitude = 48.85
+        hass_mock.config.longitude = 2.35
+        config = {"track_home": True}
+        wd = MeteoAMWeatherData(hass_mock, config)
+        with patch(
+            "custom_components.meteoam.coordinator.async_get_clientsession",
+            return_value=MagicMock(),
+        ):
+            wd.set_coordinates()
+        assert wd._coordinates == {"lat": "48.85", "lon": "2.35"}
+
+    def test_fixed_location_uses_config(self, hass_mock):
+        """set_coordinates without track_home should read from config entry."""
+        config = {"latitude": 51.5, "longitude": -0.12}
+        wd = MeteoAMWeatherData(hass_mock, config)
+        with patch(
+            "custom_components.meteoam.coordinator.async_get_clientsession",
+            return_value=MagicMock(),
+        ):
+            wd.set_coordinates()
+        assert wd._coordinates == {"lat": "51.5", "lon": "-0.12"}
+
+
+class TestDailyForecastDatetime:
+    """Tests that daily forecast stores ISO strings, not datetime objects."""
+
+    async def test_daily_forecast_datetime_is_string(self, hass_mock):
+        """localDateTime in daily_forecast must be an ISO string, not a datetime."""
+        now = dt_util.now()
+        ts = now.isoformat()
+        data = _build_api_response(timeseries=[ts])
+        wd = _make_weather_data(hass_mock)
+        wd._session.get = AsyncMock(
+            return_value=_mock_response(status=200, json_data=data)
+        )
+
+        await wd.fetch_data()
+
+        assert wd.daily_forecast, "Expected at least one daily forecast entry"
+        for entry in wd.daily_forecast:
+            assert isinstance(entry["localDateTime"], str), (
+                f"Expected str, got {type(entry['localDateTime'])}"
+            )
