@@ -15,6 +15,10 @@ BREAKING_RE = re.compile(r"^.*!:|BREAKING CHANGE", re.IGNORECASE)
 FEAT_RE = re.compile(r"^feat(\(.*?\))?:", re.IGNORECASE)
 FIX_RE = re.compile(r"^fix(\(.*?\))?:", re.IGNORECASE)
 
+# Semver patterns
+STABLE_RE = re.compile(r"^\d+\.\d+\.\d+$")
+PRERELEASE_RE = re.compile(r"^\d+\.\d+\.\d+-beta\.\d+$")
+
 
 def get_current_version() -> str:
     """Read the current version from manifest.json."""
@@ -22,20 +26,40 @@ def get_current_version() -> str:
     return data["version"]
 
 
-def get_last_tag() -> str | None:
-    """Get the most recent version tag."""
+def _get_all_tags() -> list[str]:
+    """Get all version tags sorted by version descending."""
     result = subprocess.run(  # noqa: S603
         ["git", "tag", "-l", "--sort=-v:refname"],  # noqa: S607
         capture_output=True,
         text=True,
         check=False,
     )
-    for tag in result.stdout.strip().splitlines():
-        # Accept v2.0.0 or 2.0.0
+    return result.stdout.strip().splitlines()
+
+
+def get_last_tag(*, include_prerelease: bool = False) -> str | None:
+    """Get the most recent version tag.
+
+    When include_prerelease is True, also consider beta tags.
+    """
+    for tag in _get_all_tags():
         cleaned = tag.lstrip("v")
-        if re.match(r"^\d+\.\d+\.\d+$", cleaned):
+        if STABLE_RE.match(cleaned):
+            return tag
+        if include_prerelease and PRERELEASE_RE.match(cleaned):
             return tag
     return None
+
+
+def get_next_beta_number(base_version: str) -> int:
+    """Find existing beta tags for a base version and return the next number."""
+    pattern = re.compile(rf"^v?{re.escape(base_version)}-beta\.(\d+)$")
+    max_beta = 0
+    for tag in _get_all_tags():
+        m = pattern.match(tag)
+        if m:
+            max_beta = max(max_beta, int(m.group(1)))
+    return max_beta + 1
 
 
 # Separator unlikely to appear in commit messages
@@ -186,38 +210,74 @@ def write_github_output(key: str, value: str) -> None:
 
 def main() -> None:
     """Run the release preparation."""
-    # Allow override: `prepare_release.py [major|minor|build]`
-    override = sys.argv[1] if len(sys.argv) > 1 else None
-    if override and override not in ("major", "minor", "build"):
-        sys.stderr.write("Usage: prepare_release.py [major|minor|build]\n")
-        sys.exit(1)
+    # Parse args: prepare_release.py [major|minor|build] [--prerelease beta]
+    override = None
+    prerelease = None
+    args = sys.argv[1:]
+    while args:
+        arg = args.pop(0)
+        if arg == "--prerelease":
+            if not args:
+                sys.stderr.write("--prerelease requires a value (beta)\n")
+                sys.exit(1)
+            prerelease = args.pop(0)
+            if prerelease != "beta":
+                sys.stderr.write("Only 'beta' prerelease type is supported\n")
+                sys.exit(1)
+        elif arg in ("major", "minor", "build"):
+            override = arg
+        else:
+            sys.stderr.write(
+                "Usage: prepare_release.py [major|minor|build] [--prerelease beta]\n"
+            )
+            sys.exit(1)
 
-    last_tag = get_last_tag()
-    commits = get_commits_since(last_tag)
+    # Always determine bump from commits since last *stable* tag
+    last_stable_tag = get_last_tag(include_prerelease=False)
+    commits_since_stable = get_commits_since(last_stable_tag)
 
-    if not commits:
+    if not commits_since_stable:
         sys.stderr.write("No commits since last release. Nothing to do.\n")
         sys.exit(1)
 
-    part = override or determine_bump(commits)
+    part = override or determine_bump(commits_since_stable)
     old_version = get_current_version()
-    new_version = bump(old_version, part)
+
+    # Derive base version from last stable tag (not manifest, which may be a beta)
+    if last_stable_tag:
+        stable_version = last_stable_tag.lstrip("v")
+    else:
+        stable_version = old_version.split("-")[0]
+    base_version = bump(stable_version, part)
+
+    if prerelease:
+        beta_num = get_next_beta_number(base_version)
+        new_version = f"{base_version}-beta.{beta_num}"
+        # Changelog: show only commits since last tag (beta or stable)
+        last_any_tag = get_last_tag(include_prerelease=True)
+        commits_for_notes = get_commits_since(last_any_tag)
+        notes_since_tag = last_any_tag
+    else:
+        new_version = base_version
+        commits_for_notes = commits_since_stable
+        notes_since_tag = last_stable_tag
 
     update_manifest(new_version)
     update_pyproject(new_version)
 
-    notes = generate_release_notes(commits, new_version, last_tag)
+    notes = generate_release_notes(commits_for_notes, new_version, notes_since_tag)
 
     # Output summary
-    since = last_tag or "beginning"
+    since = notes_since_tag or "beginning"
     sys.stdout.write(f"Bump: {part} ({old_version} -> {new_version})\n")
-    sys.stdout.write(f"Commits since {since}: {len(commits)}\n")
+    sys.stdout.write(f"Commits since {since}: {len(commits_for_notes)}\n")
     sys.stdout.write(f"\n{notes}")
 
     # Set outputs for GitHub Actions
     write_github_output("new_version", new_version)
     write_github_output("bump_type", part)
     write_github_output("release_notes", notes)
+    write_github_output("prerelease", "true" if prerelease else "false")
 
 
 if __name__ == "__main__":

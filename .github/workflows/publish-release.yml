@@ -12,18 +12,25 @@ jobs:
   publish:
     if: >-
       github.event.pull_request.merged &&
-      startsWith(github.event.pull_request.title, 'release: v')
+      (startsWith(github.event.pull_request.title, 'release: v') ||
+       startsWith(github.event.pull_request.title, 'prerelease: v'))
     runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Extract version
+      - name: Extract version and release type
         id: version
         run: |
           TITLE="${{ github.event.pull_request.title }}"
-          VERSION="${TITLE#release: v}"
+          if [[ "$TITLE" == prerelease:* ]]; then
+            VERSION="${TITLE#prerelease: v}"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            VERSION="${TITLE#release: v}"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
@@ -31,7 +38,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          IS_PRERELEASE="${{ steps.version.outputs.prerelease }}"
           gh pr view "${{ github.event.pull_request.number }}" --json body -q '.body' > release_notes.md
+
+          FLAGS=""
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            FLAGS="--prerelease"
+          fi
+
           gh release create "v${VERSION}" \
             --title "v${VERSION}" \
-            --notes-file release_notes.md
+            --notes-file release_notes.md \
+            $FLAGS

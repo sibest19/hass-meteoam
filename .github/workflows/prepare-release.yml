@@ -13,6 +13,14 @@ on:
           - build
           - minor
           - major
+      prerelease:
+        description: "Create a pre-release instead of a stable release"
+        required: false
+        type: choice
+        default: none
+        options:
+          - none
+          - beta
 
 permissions:
   contents: write
@@ -38,11 +46,15 @@ jobs:
         id: prep
         run: |
           BUMP="${{ inputs.bump_override }}"
-          if [ "$BUMP" = "auto" ]; then
-            python .github/scripts/prepare_release.py
-          else
-            python .github/scripts/prepare_release.py "$BUMP"
+          PRERELEASE="${{ inputs.prerelease }}"
+          ARGS=""
+          if [ "$BUMP" != "auto" ]; then
+            ARGS="$BUMP"
           fi
+          if [ "$PRERELEASE" != "none" ]; then
+            ARGS="$ARGS --prerelease $PRERELEASE"
+          fi
+          python .github/scripts/prepare_release.py $ARGS
 
       - name: Update lockfile
         run: uv lock
@@ -53,7 +65,14 @@ jobs:
           RELEASE_NOTES: ${{ steps.prep.outputs.release_notes }}
         run: |
           VERSION="${{ steps.prep.outputs.new_version }}"
+          IS_PRERELEASE="${{ steps.prep.outputs.prerelease }}"
           BRANCH="release/v${VERSION}"
+
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            PREFIX="prerelease"
+          else
+            PREFIX="release"
+          fi
 
           git config user.name "github-actions"
           git config user.email "actions@github.com"
@@ -68,12 +87,12 @@ jobs:
 
           git checkout -b "$BRANCH"
           git add custom_components/meteoam/manifest.json pyproject.toml uv.lock
-          git commit -m "release: v${VERSION}"
+          git commit -m "${PREFIX}: v${VERSION}"
           git push origin "$BRANCH"
 
           printf '%s' "$RELEASE_NOTES" > release_notes.md
           gh pr create \
             --base main \
             --head "$BRANCH" \
-            --title "release: v${VERSION}" \
+            --title "${PREFIX}: v${VERSION}" \
             --body-file release_notes.md
