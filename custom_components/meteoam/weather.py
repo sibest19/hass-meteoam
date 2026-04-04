@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.weather import (
     ATTR_FORECAST_CONDITION,
+    ATTR_FORECAST_NATIVE_TEMP,
+    ATTR_FORECAST_TIME,
     ATTR_WEATHER_HUMIDITY,
     ATTR_WEATHER_PRESSURE,
     ATTR_WEATHER_TEMPERATURE,
@@ -32,7 +34,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import ATTR_MAP, CONDITION_LOOKUP, CONF_TRACK_HOME, DOMAIN, FORECAST_MAP
+from .const import ATTR_MAP, CONDITION_MAP, CONF_TRACK_HOME, DOMAIN, FORECAST_MAP
 from .coordinator import MeteoAMConfigEntry, MeteoAMDataUpdateCoordinator
 
 DEFAULT_NAME = "MeteoAM"
@@ -81,7 +83,7 @@ def _calculate_unique_id(config: Mapping[str, Any], hourly: bool) -> str:
 
 def format_condition(condition: str) -> str | None:
     """Return condition from CONDITION_LOOKUP, or None if unrecognised."""
-    return CONDITION_LOOKUP.get(condition)
+    return CONDITION_MAP.get(condition)
 
 
 class MeteoAMWeather(SingleCoordinatorWeatherEntity[MeteoAMDataUpdateCoordinator]):
@@ -107,7 +109,6 @@ class MeteoAMWeather(SingleCoordinatorWeatherEntity[MeteoAMDataUpdateCoordinator
         """Initialise the platform with a data instance and site."""
         super().__init__(coordinator)
         self._attr_unique_id = _calculate_unique_id(config_entry.data, False)
-        self._config = config_entry.data
         self._attr_device_info = DeviceInfo(
             name="Forecast",
             entry_type=DeviceEntryType.SERVICE,
@@ -116,7 +117,7 @@ class MeteoAMWeather(SingleCoordinatorWeatherEntity[MeteoAMDataUpdateCoordinator
             model="Forecast",
             configuration_url="https://www.meteoam.it",
         )
-        self._attr_track_home = self._config.get(CONF_TRACK_HOME, False)
+        self._attr_track_home = config_entry.data.get(CONF_TRACK_HOME, False)
         self._attr_name = name
 
     @property
@@ -162,20 +163,19 @@ class MeteoAMWeather(SingleCoordinatorWeatherEntity[MeteoAMDataUpdateCoordinator
             ATTR_MAP[ATTR_WEATHER_WIND_BEARING]
         )
 
-    @property
-    def precipitation_probability(self) -> float | None:
-        """Return the precipitation probability."""
-        return self.coordinator.data.current_weather_data.get("tpp")
-
     def _forecast(self, hourly: bool) -> list[Forecast] | None:
         """Return the forecast array."""
         if hourly:
             raw_forecast = self.coordinator.data.hourly_forecast
         else:
             raw_forecast = self.coordinator.data.daily_forecast
+        required_keys = {
+            FORECAST_MAP[ATTR_FORECAST_NATIVE_TEMP],
+            FORECAST_MAP[ATTR_FORECAST_TIME],
+        }
         ha_forecast: list[Forecast] = []
         for raw_item in raw_forecast:
-            if "2t" not in raw_item or "localDateTime" not in raw_item:
+            if not required_keys.issubset(raw_item):
                 continue
             ha_item = {
                 k: raw_item[v]

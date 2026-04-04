@@ -1,4 +1,4 @@
-name: Validate with hassfest
+name: Validate hassfest
 
 on:
   pull_request:
