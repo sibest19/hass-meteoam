@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
-import secrets
 from collections.abc import Callable, Mapping
 from datetime import timedelta
+from random import randrange
 from typing import Any, Self
 
 import aiohttp
@@ -46,7 +46,7 @@ class MeteoAMDataUpdateCoordinator(DataUpdateCoordinator["MeteoAMWeatherData"]):
         self.weather = MeteoAMWeatherData(hass, config_entry.data)
         self.weather.set_coordinates()
 
-        update_interval = timedelta(minutes=secrets.randbelow(10) + 55)
+        update_interval = timedelta(minutes=randrange(55, 65))  # noqa: S311
 
         super().__init__(
             hass,
