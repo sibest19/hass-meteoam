@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable, Mapping
 from datetime import timedelta
@@ -23,6 +24,9 @@ from homeassistant.util import dt as dt_util
 
 from .const import CONF_TRACK_HOME, DOMAIN
 
+_MAX_ATTEMPTS = 3
+_RETRY_DELAY_S = 2
+
 # Dedicated Home Assistant endpoint - do not change!
 URL = "https://api.meteoam.it/deda-meteograms/api/GetMeteogram/preset1/{lat},{lon}"
 
@@ -33,6 +37,10 @@ type MeteoAMConfigEntry = ConfigEntry[MeteoAMDataUpdateCoordinator]
 
 class CannotConnectError(HomeAssistantError):
     """Unable to connect to the web site."""
+
+
+class TransientAPIError(CannotConnectError):
+    """Transient API error (network/5xx), safe to retry."""
 
 
 class MeteoAMDataUpdateCoordinator(DataUpdateCoordinator["MeteoAMWeatherData"]):
@@ -57,15 +65,33 @@ class MeteoAMDataUpdateCoordinator(DataUpdateCoordinator["MeteoAMWeatherData"]):
         )
 
     async def _async_update_data(self) -> MeteoAMWeatherData:
-        """Fetch data from MeteoAM."""
-        try:
-            return await self.weather.fetch_data()
-        except CannotConnectError as err:
-            raise UpdateFailed(
-                translation_domain=DOMAIN,
-                translation_key="update_failed",
-                translation_placeholders={"error": str(err)},
-            ) from err
+        """Fetch data from MeteoAM with retry on transient errors."""
+        for attempt in range(_MAX_ATTEMPTS):
+            try:
+                return await self.weather.fetch_data()
+            except TransientAPIError as err:
+                if attempt < _MAX_ATTEMPTS - 1:
+                    _LOGGER.warning(
+                        "MeteoAM API transient error (attempt %d/%d), "
+                        "retrying in %ds: %s",
+                        attempt + 1,
+                        _MAX_ATTEMPTS,
+                        _RETRY_DELAY_S,
+                        err,
+                    )
+                    await asyncio.sleep(_RETRY_DELAY_S)
+                else:
+                    raise UpdateFailed(
+                        translation_domain=DOMAIN,
+                        translation_key="update_failed",
+                        translation_placeholders={"error": str(err)},
+                    ) from err
+            except CannotConnectError as err:
+                raise UpdateFailed(
+                    translation_domain=DOMAIN,
+                    translation_key="update_failed",
+                    translation_placeholders={"error": str(err)},
+                ) from err
 
     def track_home(self) -> None:
         """Start tracking changes to HA home setting."""
@@ -138,22 +164,23 @@ class MeteoAMWeatherData:
 
         timeout = aiohttp.ClientTimeout(total=60)
         try:
-            resp = await self._session.get(url, timeout=timeout)
+            async with self._session.get(url, timeout=timeout) as resp:
+                if resp.status >= 500:
+                    raise TransientAPIError(f"API returned status {resp.status}")
+                if resp.status != 200:
+                    raise CannotConnectError(f"API returned status {resp.status}")
+
+                try:
+                    data = await resp.json()
+                except (aiohttp.ContentTypeError, ValueError) as err:
+                    raise CannotConnectError(
+                        f"Error parsing MeteoAM API response: {err}"
+                    ) from err
+
+                if not data:
+                    raise CannotConnectError("API returned empty response")
         except (aiohttp.ClientError, TimeoutError) as err:
-            raise CannotConnectError(f"Error connecting to MeteoAM API: {err}") from err
-
-        if resp.status != 200:
-            raise CannotConnectError(f"API returned status {resp.status}")
-
-        try:
-            data = await resp.json()
-        except (aiohttp.ContentTypeError, ValueError) as err:
-            raise CannotConnectError(
-                f"Error parsing MeteoAM API response: {err}"
-            ) from err
-
-        if not data:
-            raise CannotConnectError("API returned empty response")
+            raise TransientAPIError(f"Error connecting to MeteoAM API: {err}") from err
 
         try:
             self._parse_data(data)
