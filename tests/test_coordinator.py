@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import aiohttp
 import pytest
 from homeassistant.util import dt as dt_util
 
 from custom_components.meteoam.coordinator import (
+    _MAX_ATTEMPTS,
+    _RETRY_DELAY_S,
     CannotConnectError,
     MeteoAMDataUpdateCoordinator,
     MeteoAMWeatherData,
@@ -394,11 +396,7 @@ class TestTransientAPIError:
         wd = _make_weather_data(hass_mock)
         wd._session.get = AsyncMock(return_value=_mock_response(status=404))
 
-        with pytest.raises(CannotConnectError):
-            await wd.fetch_data()
-
-        wd._session.get = AsyncMock(return_value=_mock_response(status=404))
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(CannotConnectError) as exc_info:
             await wd.fetch_data()
         assert not isinstance(exc_info.value, TransientAPIError)
 
@@ -434,7 +432,9 @@ class TestCoordinatorRetry:
             result = await coordinator._async_update_data()
 
         assert result is weather_data
-        assert mock_sleep.call_count == 2
+        assert coordinator.weather.fetch_data.call_count == _MAX_ATTEMPTS
+        assert mock_sleep.call_count == _MAX_ATTEMPTS - 1
+        assert mock_sleep.call_args_list == [call(_RETRY_DELAY_S)] * (_MAX_ATTEMPTS - 1)
 
     async def test_raises_update_failed_after_max_retries(self, hass_mock):
         """Should raise UpdateFailed after all 3 attempts fail with transient errors."""
@@ -450,10 +450,14 @@ class TestCoordinatorRetry:
         )
 
         with (
-            patch("custom_components.meteoam.coordinator.asyncio.sleep"),
+            patch("custom_components.meteoam.coordinator.asyncio.sleep") as mock_sleep,
             pytest.raises(UpdateFailed),
         ):
             await coordinator._async_update_data()
+
+        assert coordinator.weather.fetch_data.call_count == _MAX_ATTEMPTS
+        assert mock_sleep.call_count == _MAX_ATTEMPTS - 1
+        assert mock_sleep.call_args_list == [call(_RETRY_DELAY_S)] * (_MAX_ATTEMPTS - 1)
 
     async def test_no_retry_on_non_retryable_error(self, hass_mock):
         """Should raise UpdateFailed immediately on non-retryable CannotConnectError."""
