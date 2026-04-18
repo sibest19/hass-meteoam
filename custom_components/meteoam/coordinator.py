@@ -164,24 +164,23 @@ class MeteoAMWeatherData:
 
         timeout = aiohttp.ClientTimeout(total=60)
         try:
-            resp = await self._session.get(url, timeout=timeout)
+            async with self._session.get(url, timeout=timeout) as resp:
+                if resp.status >= 500:
+                    raise TransientAPIError(f"API returned status {resp.status}")
+                if resp.status != 200:
+                    raise CannotConnectError(f"API returned status {resp.status}")
+
+                try:
+                    data = await resp.json()
+                except (aiohttp.ContentTypeError, ValueError) as err:
+                    raise CannotConnectError(
+                        f"Error parsing MeteoAM API response: {err}"
+                    ) from err
+
+                if not data:
+                    raise CannotConnectError("API returned empty response")
         except (aiohttp.ClientError, TimeoutError) as err:
             raise TransientAPIError(f"Error connecting to MeteoAM API: {err}") from err
-
-        if resp.status >= 500:
-            raise TransientAPIError(f"API returned status {resp.status}")
-        if resp.status != 200:
-            raise CannotConnectError(f"API returned status {resp.status}")
-
-        try:
-            data = await resp.json()
-        except (aiohttp.ContentTypeError, ValueError) as err:
-            raise CannotConnectError(
-                f"Error parsing MeteoAM API response: {err}"
-            ) from err
-
-        if not data:
-            raise CannotConnectError("API returned empty response")
 
         try:
             self._parse_data(data)

@@ -74,6 +74,17 @@ def _mock_response(status: int = 200, json_data: dict | None = None) -> AsyncMoc
     return resp
 
 
+def _mock_session_get(resp: AsyncMock | None = None, *, error: Exception | None = None):
+    """Mock session.get as an async context manager."""
+    cm = MagicMock()
+    if error is not None:
+        cm.__aenter__ = AsyncMock(side_effect=error)
+    else:
+        cm.__aenter__ = AsyncMock(return_value=resp)
+    cm.__aexit__ = AsyncMock(return_value=False)
+    return MagicMock(return_value=cm)
+
+
 # --- Tests ---
 
 
@@ -92,8 +103,8 @@ class TestFetchDataNetworkErrors:
     async def test_aiohttp_client_error_raises_cannot_connect(self, hass_mock):
         """aiohttp.ClientError should be caught and re-raised as CannotConnectError."""
         wd = _make_weather_data(hass_mock)
-        wd._session.get = AsyncMock(
-            side_effect=aiohttp.ClientConnectionError("connection refused")
+        wd._session.get = _mock_session_get(
+            error=aiohttp.ClientConnectionError("connection refused")
         )
 
         with pytest.raises(CannotConnectError, match="Error connecting"):
@@ -102,7 +113,7 @@ class TestFetchDataNetworkErrors:
     async def test_timeout_error_raises_cannot_connect(self, hass_mock):
         """TimeoutError should be caught and re-raised as CannotConnectError."""
         wd = _make_weather_data(hass_mock)
-        wd._session.get = AsyncMock(side_effect=TimeoutError("timed out"))
+        wd._session.get = _mock_session_get(error=TimeoutError("timed out"))
 
         with pytest.raises(CannotConnectError, match="Error connecting"):
             await wd.fetch_data()
@@ -110,7 +121,7 @@ class TestFetchDataNetworkErrors:
     async def test_non_200_status_raises_cannot_connect(self, hass_mock):
         """Non-200 HTTP status should raise CannotConnectError."""
         wd = _make_weather_data(hass_mock)
-        wd._session.get = AsyncMock(return_value=_mock_response(status=503))
+        wd._session.get = _mock_session_get(_mock_response(status=503))
 
         with pytest.raises(CannotConnectError, match="API returned status 503"):
             await wd.fetch_data()
@@ -124,7 +135,7 @@ class TestFetchDataNetworkErrors:
                 MagicMock(), MagicMock(), message="not json"
             )
         )
-        wd._session.get = AsyncMock(return_value=resp)
+        wd._session.get = _mock_session_get(resp)
 
         with pytest.raises(CannotConnectError, match="Error parsing"):
             await wd.fetch_data()
@@ -134,7 +145,7 @@ class TestFetchDataNetworkErrors:
         wd = _make_weather_data(hass_mock)
         resp = _mock_response(status=200)
         resp.json = AsyncMock(side_effect=ValueError("bad json"))
-        wd._session.get = AsyncMock(return_value=resp)
+        wd._session.get = _mock_session_get(resp)
 
         with pytest.raises(CannotConnectError, match="Error parsing"):
             await wd.fetch_data()
@@ -142,9 +153,7 @@ class TestFetchDataNetworkErrors:
     async def test_empty_response_raises_cannot_connect(self, hass_mock):
         """Empty API response should raise CannotConnectError."""
         wd = _make_weather_data(hass_mock)
-        wd._session.get = AsyncMock(
-            return_value=_mock_response(status=200, json_data={})
-        )
+        wd._session.get = _mock_session_get(_mock_response(status=200, json_data={}))
 
         with pytest.raises(CannotConnectError, match="empty response"):
             await wd.fetch_data()
@@ -157,8 +166,8 @@ class TestFetchDataParsingErrors:
         """Missing 'extrainfo' key should raise CannotConnectError."""
         wd = _make_weather_data(hass_mock)
         bad_data = {"timeseries": [], "paramlist": [], "datasets": {"0": {}}}
-        wd._session.get = AsyncMock(
-            return_value=_mock_response(status=200, json_data=bad_data)
+        wd._session.get = _mock_session_get(
+            _mock_response(status=200, json_data=bad_data)
         )
 
         with pytest.raises(CannotConnectError, match="Error processing"):
@@ -172,8 +181,8 @@ class TestFetchDataParsingErrors:
             "paramlist": ["2t"],
             "extrainfo": {"stats": []},
         }
-        wd._session.get = AsyncMock(
-            return_value=_mock_response(status=200, json_data=bad_data)
+        wd._session.get = _mock_session_get(
+            _mock_response(status=200, json_data=bad_data)
         )
 
         with pytest.raises(CannotConnectError, match="Error processing"):
@@ -191,9 +200,7 @@ class TestCurrentWeatherFallback:
 
         data = _build_api_response(timeseries=[past, future])
         wd = _make_weather_data(hass_mock)
-        wd._session.get = AsyncMock(
-            return_value=_mock_response(status=200, json_data=data)
-        )
+        wd._session.get = _mock_session_get(_mock_response(status=200, json_data=data))
 
         await wd.fetch_data()
 
@@ -208,9 +215,7 @@ class TestCurrentWeatherFallback:
 
         data = _build_api_response(timeseries=[future1, future2])
         wd = _make_weather_data(hass_mock)
-        wd._session.get = AsyncMock(
-            return_value=_mock_response(status=200, json_data=data)
-        )
+        wd._session.get = _mock_session_get(_mock_response(status=200, json_data=data))
 
         await wd.fetch_data()
 
@@ -228,9 +233,7 @@ class TestCurrentWeatherFallback:
         # First fetch: has a past entry → current weather populated
         data1 = _build_api_response(timeseries=[past, future])
         wd = _make_weather_data(hass_mock)
-        wd._session.get = AsyncMock(
-            return_value=_mock_response(status=200, json_data=data1)
-        )
+        wd._session.get = _mock_session_get(_mock_response(status=200, json_data=data1))
         await wd.fetch_data()
         first_current = wd.current_weather_data.copy()
         assert first_current
@@ -239,9 +242,7 @@ class TestCurrentWeatherFallback:
         future1 = (now + timedelta(hours=1)).isoformat()
         future2 = (now + timedelta(hours=2)).isoformat()
         data2 = _build_api_response(timeseries=[future1, future2])
-        wd._session.get = AsyncMock(
-            return_value=_mock_response(status=200, json_data=data2)
-        )
+        wd._session.get = _mock_session_get(_mock_response(status=200, json_data=data2))
         await wd.fetch_data()
 
         # Should be the fallback (first hourly entry), not the stale past data
@@ -256,9 +257,7 @@ class TestCurrentWeatherFallback:
 
         data = _build_api_response(timeseries=[past, future1, future2])
         wd = _make_weather_data(hass_mock)
-        wd._session.get = AsyncMock(
-            return_value=_mock_response(status=200, json_data=data)
-        )
+        wd._session.get = _mock_session_get(_mock_response(status=200, json_data=data))
 
         await wd.fetch_data()
 
@@ -357,9 +356,7 @@ class TestDailyForecastDatetime:
         ts = now.isoformat()
         data = _build_api_response(timeseries=[ts])
         wd = _make_weather_data(hass_mock)
-        wd._session.get = AsyncMock(
-            return_value=_mock_response(status=200, json_data=data)
-        )
+        wd._session.get = _mock_session_get(_mock_response(status=200, json_data=data))
 
         await wd.fetch_data()
 
@@ -376,7 +373,7 @@ class TestTransientAPIError:
     async def test_5xx_raises_transient_error(self, hass_mock):
         """HTTP 5xx should raise TransientAPIError, a subclass of CannotConnectError."""
         wd = _make_weather_data(hass_mock)
-        wd._session.get = AsyncMock(return_value=_mock_response(status=503))
+        wd._session.get = _mock_session_get(_mock_response(status=503))
 
         with pytest.raises(TransientAPIError, match="API returned status 503"):
             await wd.fetch_data()
@@ -384,8 +381,8 @@ class TestTransientAPIError:
     async def test_network_error_raises_transient_error(self, hass_mock):
         """aiohttp.ClientError should raise TransientAPIError."""
         wd = _make_weather_data(hass_mock)
-        wd._session.get = AsyncMock(
-            side_effect=aiohttp.ClientConnectionError("connection refused")
+        wd._session.get = _mock_session_get(
+            error=aiohttp.ClientConnectionError("connection refused")
         )
 
         with pytest.raises(TransientAPIError, match="Error connecting"):
@@ -394,7 +391,7 @@ class TestTransientAPIError:
     async def test_4xx_raises_cannot_connect_not_transient(self, hass_mock):
         """HTTP 4xx should raise CannotConnectError but NOT TransientAPIError."""
         wd = _make_weather_data(hass_mock)
-        wd._session.get = AsyncMock(return_value=_mock_response(status=404))
+        wd._session.get = _mock_session_get(_mock_response(status=404))
 
         with pytest.raises(CannotConnectError) as exc_info:
             await wd.fetch_data()
