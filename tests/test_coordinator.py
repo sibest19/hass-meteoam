@@ -11,7 +11,9 @@ from homeassistant.util import dt as dt_util
 
 from custom_components.meteoam.coordinator import (
     CannotConnectError,
+    MeteoAMDataUpdateCoordinator,
     MeteoAMWeatherData,
+    TransientAPIError,
 )
 
 # --- Helpers for building fake API responses ---
@@ -364,3 +366,110 @@ class TestDailyForecastDatetime:
             assert isinstance(entry["localDateTime"], str), (
                 f"Expected str, got {type(entry['localDateTime'])}"
             )
+
+
+class TestTransientAPIError:
+    """Tests for transient vs non-retryable error classification in fetch_data."""
+
+    async def test_5xx_raises_transient_error(self, hass_mock):
+        """HTTP 5xx should raise TransientAPIError, a subclass of CannotConnectError."""
+        wd = _make_weather_data(hass_mock)
+        wd._session.get = AsyncMock(return_value=_mock_response(status=503))
+
+        with pytest.raises(TransientAPIError, match="API returned status 503"):
+            await wd.fetch_data()
+
+    async def test_network_error_raises_transient_error(self, hass_mock):
+        """aiohttp.ClientError should raise TransientAPIError."""
+        wd = _make_weather_data(hass_mock)
+        wd._session.get = AsyncMock(
+            side_effect=aiohttp.ClientConnectionError("connection refused")
+        )
+
+        with pytest.raises(TransientAPIError, match="Error connecting"):
+            await wd.fetch_data()
+
+    async def test_4xx_raises_cannot_connect_not_transient(self, hass_mock):
+        """HTTP 4xx should raise CannotConnectError but NOT TransientAPIError."""
+        wd = _make_weather_data(hass_mock)
+        wd._session.get = AsyncMock(return_value=_mock_response(status=404))
+
+        with pytest.raises(CannotConnectError):
+            await wd.fetch_data()
+
+        wd._session.get = AsyncMock(return_value=_mock_response(status=404))
+        with pytest.raises(Exception) as exc_info:
+            await wd.fetch_data()
+        assert not isinstance(exc_info.value, TransientAPIError)
+
+
+def _make_coordinator(hass_mock: MagicMock) -> MeteoAMDataUpdateCoordinator:
+    """Create a MeteoAMDataUpdateCoordinator with a mocked config entry."""
+    config_entry = MagicMock()
+    config_entry.data = {"latitude": "41.9", "longitude": "12.5"}
+    coordinator = MeteoAMDataUpdateCoordinator.__new__(MeteoAMDataUpdateCoordinator)
+    coordinator.hass = hass_mock
+    coordinator.logger = MagicMock()
+    coordinator.weather = MagicMock()
+    return coordinator
+
+
+class TestCoordinatorRetry:
+    """Tests for retry logic in _async_update_data."""
+
+    async def test_succeeds_after_transient_failures(self, hass_mock):
+        """Should succeed on 3rd attempt after 2 transient failures."""
+        coordinator = _make_coordinator(hass_mock)
+        weather_data = MagicMock()
+        coordinator.weather.fetch_data = AsyncMock(
+            side_effect=[
+                TransientAPIError("502"),
+                TransientAPIError("502"),
+                weather_data,
+            ]
+        )
+
+        with patch("custom_components.meteoam.coordinator.asyncio.sleep") as mock_sleep:
+            mock_sleep.return_value = None
+            result = await coordinator._async_update_data()
+
+        assert result is weather_data
+        assert mock_sleep.call_count == 2
+
+    async def test_raises_update_failed_after_max_retries(self, hass_mock):
+        """Should raise UpdateFailed after all 3 attempts fail with transient errors."""
+        from homeassistant.helpers.update_coordinator import UpdateFailed
+
+        coordinator = _make_coordinator(hass_mock)
+        coordinator.weather.fetch_data = AsyncMock(
+            side_effect=[
+                TransientAPIError("502"),
+                TransientAPIError("502"),
+                TransientAPIError("502"),
+            ]
+        )
+
+        with (
+            patch("custom_components.meteoam.coordinator.asyncio.sleep"),
+            pytest.raises(UpdateFailed),
+        ):
+            await coordinator._async_update_data()
+
+    async def test_no_retry_on_non_retryable_error(self, hass_mock):
+        """Should raise UpdateFailed immediately on non-retryable CannotConnectError."""
+        from homeassistant.helpers.update_coordinator import UpdateFailed
+
+        coordinator = _make_coordinator(hass_mock)
+        coordinator.weather.fetch_data = AsyncMock(
+            side_effect=CannotConnectError(
+                "Error parsing MeteoAM API response: bad json"
+            )
+        )
+
+        with (
+            patch("custom_components.meteoam.coordinator.asyncio.sleep") as mock_sleep,
+            pytest.raises(UpdateFailed),
+        ):
+            await coordinator._async_update_data()
+
+        mock_sleep.assert_not_called()
