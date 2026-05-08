@@ -1,6 +1,6 @@
 ## Version Adoption
 
-_Last updated: 2026-05-07_
+_Last updated: 2026-05-08_
 
 
 > Data reflects installations reporting to Home Assistant analytics.
