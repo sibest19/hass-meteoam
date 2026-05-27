@@ -1,16 +1,16 @@
 ## Version Adoption
 
-_Last updated: 2026-05-26_
+_Last updated: 2026-05-27_
 
 
 > Data reflects installations reporting to Home Assistant analytics.
 
 | Version | Users | Adoption |
 |---------|-------|----------|
-| **2.0.3** ⭐ | 40 | 53.33% |
-| 1.0.0 | 33 | 44.00% |
-| 2.1.0-beta.3 | 2 | 2.67% |
+| **2.0.3** ⭐ | 40 | 52.63% |
+| 1.0.0 | 33 | 43.42% |
+| 2.1.0-beta.3 | 3 | 3.95% |
 
-**Total reporting installations:** 75
-**Latest version adoption:** 53.33%
-**Outdated installations:** 46.67%
+**Total reporting installations:** 76
+**Latest version adoption:** 52.63%
+**Outdated installations:** 47.37%
