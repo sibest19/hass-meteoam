@@ -264,6 +264,93 @@ class TestCurrentWeatherFallback:
         assert len(wd.hourly_forecast) == 2
         assert len(wd.daily_forecast) == 1
 
+    async def test_daily_forecast_includes_max_precip_probability(self, hass_mock):
+        """Daily forecast should carry the max hourly tpp for that day."""
+        now = dt_util.now()
+        t0 = now.replace(hour=10, minute=0, second=0, microsecond=0)
+        t1 = t0 + timedelta(hours=1)
+        paramlist = ["tpp", "icon"]
+        datasets = {
+            "0": {
+                "0": {"0": 20, "1": 80},  # tpp
+                "1": {"0": "01", "1": "01"},  # icon
+            }
+        }
+        stats = [
+            {
+                "localDate": t0.isoformat(),
+                "maxCelsius": 20,
+                "minCelsius": 10,
+                "icon": "01",
+            }
+        ]
+        data = _build_api_response(
+            timeseries=[t0.isoformat(), t1.isoformat()],
+            paramlist=paramlist,
+            datasets=datasets,
+            stats=stats,
+        )
+        wd = _make_weather_data(hass_mock)
+        wd._session.get = _mock_session_get(_mock_response(status=200, json_data=data))
+
+        await wd.fetch_data()
+
+        assert wd.daily_forecast[0]["tpp"] == 80
+
+    async def test_daily_forecast_omits_precip_when_no_tpp(self, hass_mock):
+        """Daily forecast should not carry tpp when the API omits it."""
+        now = dt_util.now()
+        t0 = now.replace(hour=10, minute=0, second=0, microsecond=0)
+        paramlist = ["2t", "icon"]
+        datasets = {"0": {"0": {"0": 15}, "1": {"0": "01"}}}
+        stats = [
+            {
+                "localDate": t0.isoformat(),
+                "maxCelsius": 20,
+                "minCelsius": 10,
+                "icon": "01",
+            }
+        ]
+        data = _build_api_response(
+            timeseries=[t0.isoformat()],
+            paramlist=paramlist,
+            datasets=datasets,
+            stats=stats,
+        )
+        wd = _make_weather_data(hass_mock)
+        wd._session.get = _mock_session_get(_mock_response(status=200, json_data=data))
+
+        await wd.fetch_data()
+
+        assert "tpp" not in wd.daily_forecast[0]
+
+    async def test_daily_forecast_skips_placeholder_days(self, hass_mock):
+        """Days the API pads with '-' placeholders should be dropped."""
+        now = dt_util.now()
+        t0 = now.replace(hour=10, minute=0, second=0, microsecond=0)
+        stats = [
+            {
+                "localDate": t0.isoformat(),
+                "maxCelsius": 20,
+                "minCelsius": 10,
+                "icon": "01",
+            },
+            {
+                "localDate": (t0 + timedelta(days=1)).isoformat(),
+                "maxCelsius": "-",
+                "minCelsius": "-",
+                "icon": "-",
+            },
+        ]
+        data = _build_api_response(timeseries=[t0.isoformat()], stats=stats)
+        wd = _make_weather_data(hass_mock)
+        wd._session.get = _mock_session_get(_mock_response(status=200, json_data=data))
+
+        await wd.fetch_data()
+
+        assert len(wd.daily_forecast) == 1
+        assert wd.daily_forecast[0]["2t"] == 20.0
+
 
 class TestFetchDataPreconditions:
     """Tests for fetch_data precondition checks."""

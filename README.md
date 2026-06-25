@@ -9,7 +9,7 @@ A Home Assistant custom component that provides weather data from the Italian Ai
 ## Features
 
 - **Current weather conditions**: temperature, humidity, pressure, wind speed & bearing, precipitation probability
-- **Daily forecast** with high/low temperatures and condition icons
+- **Daily forecast** with high/low temperatures, condition icons, and precipitation probability
 - **Hourly forecast** with full weather details including precipitation probability
 - **Track home location**: automatically updates when your Home Assistant home location changes
 - **Multiple locations**: configure as many weather entities as you need
@@ -75,7 +75,7 @@ You can reconfigure latitude and longitude later via the integration's **Options
 Weather forecast data is fetched from the MeteoAM API (`api.meteoam.it`), which provides ECMWF-based model output:
 
 - **Hourly forecast**: up to ~4 days ahead (hourly for 3 days, then 3-hourly)
-- **Daily forecast**: up to 5 days ahead with min/max temperatures
+- **Daily forecast**: up to 5 days ahead with min/max temperatures and precipitation probability (derived as the max hourly value per day, since the API only provides it hourly)
 - **Update interval**: approximately every 60 minutes (randomized 55–65 min)
 
 ## Development

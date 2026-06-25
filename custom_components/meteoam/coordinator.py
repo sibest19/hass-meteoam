@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable, Mapping
-from datetime import timedelta
+from datetime import date, timedelta
 from random import randrange
 from typing import Any, Self
 
@@ -33,6 +33,14 @@ URL = "https://api.meteoam.it/deda-meteograms/api/GetMeteogram/preset1/{lat},{lo
 _LOGGER = logging.getLogger(__name__)
 
 type MeteoAMConfigEntry = ConfigEntry[MeteoAMDataUpdateCoordinator]
+
+
+def _to_float_or_none(value: Any) -> float | None:
+    """Coerce an API value to float, returning None for missing placeholders."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 class CannotConnectError(HomeAssistantError):
@@ -193,20 +201,6 @@ class MeteoAMWeatherData:
 
     def _parse_data(self, data: dict[str, Any]) -> None:
         """Parse the API response data."""
-        # Parse daily forecast from stats
-        self.daily_forecast = []
-        for item in data["extrainfo"]["stats"]:
-            parsed_dt = dt_util.parse_datetime(item["localDate"])
-            if parsed_dt is None:
-                continue
-            element = {
-                "localDateTime": parsed_dt.isoformat(),
-                "2t": item["maxCelsius"],
-                "2t_min": item["minCelsius"],
-                "icon": item["icon"],
-            }
-            self.daily_forecast.append(element)
-
         # Parse hourly forecast from timeseries
         hourly_forecast: list[dict] = []
         timeseries_data = data["timeseries"]
@@ -215,6 +209,11 @@ class MeteoAMWeatherData:
         now = dt_util.now()
 
         current_weather_data: dict[str, Any] = {}
+
+        # The API exposes precipitation probability ("tpp") only per hour, not in
+        # the daily stats. Track the max hourly probability per local date so it
+        # can be attached to the daily forecast below.
+        daily_precip_probability: dict[date, float] = {}
 
         for tidx, t in enumerate(timeseries_data):
             parsed_dt = dt_util.parse_datetime(t)
@@ -227,6 +226,13 @@ class MeteoAMWeatherData:
             for pidx, p in enumerate(paramlist_data):
                 element[p] = datasets[str(pidx)][tidx_str]
 
+            tpp = element.get("tpp")
+            if tpp is not None:
+                day = local_dt.date()
+                daily_precip_probability[day] = max(
+                    daily_precip_probability.get(day, tpp), tpp
+                )
+
             if local_dt <= now:
                 current_weather_data = element
             if local_dt >= now:
@@ -238,3 +244,26 @@ class MeteoAMWeatherData:
 
         self.current_weather_data = current_weather_data
         self.hourly_forecast = hourly_forecast
+
+        # Parse daily forecast from stats, enriching it with the per-day max
+        # precipitation probability derived from the hourly data.
+        self.daily_forecast = []
+        for item in data["extrainfo"]["stats"]:
+            parsed_dt = dt_util.parse_datetime(item["localDate"])
+            if parsed_dt is None:
+                continue
+            # The API pads the last day(s) of the range with "-" placeholders
+            # when no model data is available. Skip those incomplete days.
+            max_temp = _to_float_or_none(item["maxCelsius"])
+            if max_temp is None:
+                continue
+            element = {
+                "localDateTime": parsed_dt.isoformat(),
+                "2t": max_temp,
+                "2t_min": _to_float_or_none(item["minCelsius"]),
+                "icon": item["icon"],
+            }
+            tpp = daily_precip_probability.get(dt_util.as_local(parsed_dt).date())
+            if tpp is not None:
+                element["tpp"] = tpp
+            self.daily_forecast.append(element)
