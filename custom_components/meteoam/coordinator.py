@@ -35,6 +35,14 @@ _LOGGER = logging.getLogger(__name__)
 type MeteoAMConfigEntry = ConfigEntry[MeteoAMDataUpdateCoordinator]
 
 
+def _to_float_or_none(value: Any) -> float | None:
+    """Coerce an API value to float, returning None for missing placeholders."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 class CannotConnectError(HomeAssistantError):
     """Unable to connect to the web site."""
 
@@ -244,10 +252,15 @@ class MeteoAMWeatherData:
             parsed_dt = dt_util.parse_datetime(item["localDate"])
             if parsed_dt is None:
                 continue
+            # The API pads the last day(s) of the range with "-" placeholders
+            # when no model data is available. Skip those incomplete days.
+            max_temp = _to_float_or_none(item["maxCelsius"])
+            if max_temp is None:
+                continue
             element = {
                 "localDateTime": parsed_dt.isoformat(),
-                "2t": item["maxCelsius"],
-                "2t_min": item["minCelsius"],
+                "2t": max_temp,
+                "2t_min": _to_float_or_none(item["minCelsius"]),
                 "icon": item["icon"],
             }
             tpp = daily_precip_probability.get(dt_util.as_local(parsed_dt).date())
