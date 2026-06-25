@@ -5,3 +5,49 @@ logger:
   default: warning
   logs:
     custom_components.meteoam: debug
+
+# Surface MeteoAM precipitation probability as sensors so it can be shown on a
+# dashboard card. The forecast (incl. precipitation_probability) is not a state
+# attribute, so we fetch it via the weather.get_forecasts action and store the
+# result. MeteoAM provides probability only (no mm amount), so this is the only
+# precipitation signal available to display.
+template:
+  - trigger:
+      # Several triggers so the fetch is robust against the startup race between
+      # the template platform and the custom weather integration:
+      #  - homeassistant start: covers the entity already being available
+      #  - state: covers the entity (re)appearing later
+      #  - time_pattern: periodic refresh
+      - platform: homeassistant
+        event: start
+      - platform: state
+        entity_id: weather.previsioni_casa_home
+        not_to:
+          - unavailable
+          - unknown
+      - platform: time_pattern
+        minutes: "/30"
+    action:
+      # continue_on_error: if the start trigger fires before the weather entity
+      # is set up, the service call raises; ignore it and let the state trigger
+      # populate the sensors once the entity is available.
+      - continue_on_error: true
+        service: weather.get_forecasts
+        target:
+          entity_id: weather.previsioni_casa_home
+        data:
+          type: daily
+        response_variable: daily_fc
+    sensor:
+      - name: "MeteoAM rain chance today"
+        unique_id: meteoam_rain_chance_today
+        unit_of_measurement: "%"
+        state: >
+          {{ daily_fc['weather.previsioni_casa_home'].forecast[0].precipitation_probability
+             | default(0) }}
+      - name: "MeteoAM rain chance tomorrow"
+        unique_id: meteoam_rain_chance_tomorrow
+        unit_of_measurement: "%"
+        state: >
+          {{ daily_fc['weather.previsioni_casa_home'].forecast[1].precipitation_probability
+             | default(0) }}
