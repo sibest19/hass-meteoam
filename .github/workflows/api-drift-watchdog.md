@@ -13,6 +13,7 @@ on:
 permissions:
   contents: read
   issues: read
+  copilot-requests: write # authenticates the default Copilot engine (no secret needed)
 
 # The agent must reach the live MeteoAM API in addition to the defaults.
 network:
