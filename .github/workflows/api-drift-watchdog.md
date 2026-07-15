@@ -22,7 +22,11 @@ network:
     - "api.meteoam.it"
 
 tools:
-  bash: ["curl", "jq"]
+  # Unrestricted bash: the agent needs to chain curl -> file and pipe to jq.
+  # Narrow per-command grants (curl/jq) only cover standalone shell calls, not
+  # compound scripts with redirects/pipes, so they get denied in --no-ask-user
+  # mode. Egress is still locked down independently by the network allowlist above.
+  bash: [":*"]
 
 safe-outputs:
   create-issue:
@@ -42,16 +46,22 @@ report it, and open a single issue describing exactly what changed.
 
 ## What to fetch
 
-Query the live meteogram endpoint for two fixed locations (Rome and Milan):
+Query the live meteogram endpoint for two fixed locations (Rome and Milan).
+The endpoint needs no special headers — the integration itself sends none:
 
 ```bash
-curl -sS -H 'Origin: https://www.meteoam.it' -H 'Referer: https://www.meteoam.it/' \
-  'https://api.meteoam.it/deda-meteograms/api/GetMeteogram/preset1/41.9027835,12.4963655'
-curl -sS -H 'Origin: https://www.meteoam.it' -H 'Referer: https://www.meteoam.it/' \
-  'https://api.meteoam.it/deda-meteograms/api/GetMeteogram/preset1/45.4642,9.1900'
+curl -sS 'https://api.meteoam.it/deda-meteograms/api/GetMeteogram/preset1/41.9027835,12.4963655' > /tmp/gh-aw/agent/rome.json
+curl -sS 'https://api.meteoam.it/deda-meteograms/api/GetMeteogram/preset1/45.4642,9.1900'      > /tmp/gh-aw/agent/milan.json
 ```
 
 Use `jq` to inspect structure. Do **not** assume the response shape — read it.
+
+> **Interpreting errors correctly.** Only `api.meteoam.it` (plus package/CA
+> defaults) is reachable from this sandbox; that allowlist is enforced at the
+> network layer. If a shell command is refused with a *permission* error, that
+> is a tool-permission problem, **not** a network outage — retry with a simpler
+> standalone command. Only conclude the API is unreachable if a command that
+> actually executed returns a network/DNS/timeout error for **both** locations.
 
 ## The contract the integration depends on
 
