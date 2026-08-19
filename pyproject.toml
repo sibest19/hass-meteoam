@@ -1,6 +1,6 @@
 [project]
 name = "hass-meteoam"
-version = "2.2.0-beta.1"
+version = "2.2.0-beta.2"
 description = "Home Assistant custom component for Meteo Aeronautica Militare (MeteoAM)"
 license = "MIT"
 requires-python = ">=3.13"
