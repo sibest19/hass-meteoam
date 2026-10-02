@@ -10,6 +10,11 @@
   },
   "packageRules": [
     {
+      "description": "gh-aw lock files are compiled output; upgrade via `gh extension upgrade gh-aw && gh aw compile`",
+      "matchFileNames": [".github/workflows/*.lock.yml"],
+      "enabled": false
+    },
+    {
       "description": "Group Python dependencies",
       "matchManagers": ["uv"],
       "matchDepTypes": ["dependencies"],
