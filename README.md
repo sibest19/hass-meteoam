@@ -38,13 +38,31 @@ A Home Assistant custom component that provides weather data from the Italian Ai
 ## Requirements
 
 - Home Assistant **2025.2** or newer
-- Python **3.13** or newer
+- A supported Home Assistant installation supplies its own Python runtime. For development, Python **3.13** tests the minimum HA version; current HA releases require Python **3.14.2** or newer.
 
 ## Installation
 
-1. Install using [HACS](https://github.com/hacs/integration). Or install manually by copying the `custom_components/meteoam` folder into `<config_dir>/custom_components`.
+### Home Assistant 2026.11 or newer
+
+1. Open **Settings → Marketplace**, accept the community software notice, and find **Meteo Aeronautica Militare (MeteoAM)**.
+2. Select **Install**. On a first installation, Home Assistant opens the setup flow without requiring a restart.
+3. Enter the location details and save. If you closed setup, open **Settings → Devices & services → Add integration** and search for **MeteoAM**.
+
+Updates to an already loaded integration still require a Home Assistant restart; follow the Marketplace prompt.
+
+### Home Assistant 2025.2 through 2026.10
+
+1. Install MeteoAM using [HACS](https://github.com/hacs/integration).
 2. Restart Home Assistant.
-3. In the Home Assistant UI, navigate to **Settings → Devices & Services**. Click **+ Add Integration** and search for **MeteoAM**. Fill out the options and save.
+3. Open **Settings → Devices & services → Add integration**, search for **MeteoAM**, and enter the location details.
+
+### Upgrading from HACS to Marketplace
+
+Home Assistant 2026.11 automatically migrates HACS installations to Marketplace. Keep MeteoAM installed and configured: do not uninstall it or recreate its entries. The migration is intended to retain installed repositories and their update entities. See the [official migration guide](https://next.home-assistant.io/integrations/marketplace/#coming-from-hacs).
+
+### Manual installation
+
+Copy `custom_components/meteoam` into `<config_dir>/custom_components`, restart Home Assistant, then add **MeteoAM** under **Settings → Devices & services**. Restart after replacing the integration files to update it.
 
 ## Configuration
 
@@ -116,8 +134,8 @@ hass-meteoam/
 │       ├── const.py         # Constants, condition maps
 │       ├── coordinator.py   # Data update coordinator (API calls)
 │       ├── manifest.json    # Integration metadata
-│       ├── strings.json     # UI strings / translations
-│       └── weather.py       # Weather entity platform
+│       ├── weather.py       # Weather entity platform
+│       └── translations/    # Finished UI strings (en.json)
 ├── config/                  # HA runtime config (gitignored, except seed)
 │   └── configuration.yaml   # Seed HA configuration
 ├── scripts/
@@ -157,6 +175,22 @@ hass-meteoam/
 
 5. **Test** — Run `make test` to execute the test suite.
 
+### Compatibility tests
+
+CI tests **HA 2025.2.0 / Python 3.13**, **HA 2026.10.4 / Python 3.14**, and **HA 2026.11.0 / Python 3.14** on pull requests and daily. Tests use real Home Assistant setup, registries, weather services, options changes, home-location tracking, reloads, unloads, and English translations. Weather responses are mocked.
+
+The local `.python-version` remains at 3.13 for older-version development. To reproduce one exact CI target in a separate environment:
+
+```bash
+uv venv --python 3.14 /tmp/meteoam-test
+uv export --locked --only-group test --no-hashes --no-emit-project --output-file /tmp/meteoam-test-requirements.txt
+uv pip install --python /tmp/meteoam-test/bin/python -r /tmp/meteoam-test-requirements.txt 'homeassistant==2026.11.0'
+uv pip check --python /tmp/meteoam-test/bin/python
+/tmp/meteoam-test/bin/python -m pytest tests/
+```
+
+Use Python 3.13 and `homeassistant==2025.2.0` to check the minimum. CI verifies the installed HA version explicitly. These runtime tests do not replace a complete HACS-to-Marketplace upgrade rehearsal.
+
 ### Tooling
 
 | Tool | Purpose |
@@ -164,7 +198,7 @@ hass-meteoam/
 | [uv](https://docs.astral.sh/uv/) | Python dependency management (replaces pip/poetry) |
 | [Ruff](https://docs.astral.sh/ruff/) | Linting & formatting (replaces flake8, black, isort) |
 | [pytest](https://docs.pytest.org/) | Test framework |
-| [pytest-homeassistant-custom-component](https://github.com/MatthewFlamworthy/pytest-homeassistant-custom-component) | HA test fixtures and mocks |
+| [pytest-asyncio](https://pytest-asyncio.readthedocs.io/) | Async tests and disposable Home Assistant fixtures |
 | [pre-commit](https://pre-commit.com/) | Git hook manager for automated checks |
 
 ### VS Code Devcontainer

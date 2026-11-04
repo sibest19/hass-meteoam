@@ -9,7 +9,7 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
-    OptionsFlowWithReload,
+    OptionsFlow,
 )
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE, CONF_NAME
 from homeassistant.core import HomeAssistant, callback
@@ -120,7 +120,7 @@ class MeteoAMConfigFlowHandler(ConfigFlow, domain=DOMAIN):
         return MeteoAMOptionsFlowHandler()
 
 
-class MeteoAMOptionsFlowHandler(OptionsFlowWithReload):
+class MeteoAMOptionsFlowHandler(OptionsFlow):
     """Options flow for MeteoAM component."""
 
     async def async_step_init(
@@ -129,9 +129,10 @@ class MeteoAMOptionsFlowHandler(OptionsFlowWithReload):
         """Configure options for MeteoAM."""
         if user_input is not None:
             # Update config entry with data from user input
-            self.hass.config_entries.async_update_entry(
+            if self.hass.config_entries.async_update_entry(
                 self.config_entry, data=user_input
-            )
+            ):
+                await self.hass.config_entries.async_reload(self.config_entry.entry_id)
             return self.async_create_entry(
                 title=self.config_entry.title, data=user_input
             )

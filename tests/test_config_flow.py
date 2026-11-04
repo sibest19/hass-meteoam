@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
 
@@ -18,6 +18,7 @@ def hass_mock():
     hass.config.longitude = 12.5
     hass.config.location_name = "Home"
     hass.config_entries.async_update_entry = MagicMock()
+    hass.config_entries.async_reload = AsyncMock()
     return hass
 
 
@@ -87,3 +88,32 @@ class TestOptionsFlow:
             updated_data = call_kwargs.kwargs.get("data") or call_kwargs.args[1]
             assert updated_data == user_input
             assert "stale_key" not in updated_data
+
+
+async def test_unchanged_options_do_not_reload(hass_mock):
+    """Submitting the current configuration must not restart the integration."""
+    hass_mock.config_entries.async_update_entry.return_value = False
+    entry = MagicMock()
+    entry.data = {"name": "Rome", "latitude": 41.9, "longitude": 12.5}
+    handler = MeteoAMOptionsFlowHandler()
+    handler.hass = hass_mock
+    with patch.object(
+        type(handler), "config_entry", new_callable=PropertyMock, return_value=entry
+    ):
+        await handler.async_step_init(entry.data)
+    hass_mock.config_entries.async_reload.assert_not_awaited()
+
+
+async def test_opening_options_does_not_change_configuration(hass_mock):
+    """Opening a form, including one the user cancels, does not change data."""
+    entry = MagicMock()
+    entry.data = {"name": "Rome", "latitude": 41.9, "longitude": 12.5}
+    handler = MeteoAMOptionsFlowHandler()
+    handler.hass = hass_mock
+    with patch.object(
+        type(handler), "config_entry", new_callable=PropertyMock, return_value=entry
+    ):
+        result = await handler.async_step_init()
+    assert result["step_id"] == "init"
+    hass_mock.config_entries.async_update_entry.assert_not_called()
+    hass_mock.config_entries.async_reload.assert_not_awaited()
