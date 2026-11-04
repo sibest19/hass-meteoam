@@ -28,8 +28,9 @@ def get_current_version() -> str:
 
 def _get_all_tags() -> list[str]:
     """Get all version tags sorted by version descending."""
+    # versionsort.suffix makes v2.2.0-beta.2 sort below v2.2.0, not above it
     result = subprocess.run(  # noqa: S603
-        ["git", "tag", "-l", "--sort=-v:refname"],  # noqa: S607
+        ["git", "-c", "versionsort.suffix=-", "tag", "-l", "--sort=-v:refname"],  # noqa: S607
         capture_output=True,
         text=True,
         check=False,
