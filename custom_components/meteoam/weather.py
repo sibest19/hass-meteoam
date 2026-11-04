@@ -32,7 +32,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
-from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import ATTR_MAP, CONDITION_MAP, CONF_TRACK_HOME, DOMAIN, FORECAST_MAP
 from .coordinator import MeteoAMConfigEntry, MeteoAMDataUpdateCoordinator
@@ -43,7 +43,7 @@ DEFAULT_NAME = "MeteoAM"
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: MeteoAMConfigEntry,
-    async_add_entities: AddConfigEntryEntitiesCallback,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Add a weather entity from a config_entry."""
     coordinator = config_entry.runtime_data

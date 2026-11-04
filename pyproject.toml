@@ -6,11 +6,14 @@ license = "MIT"
 requires-python = ">=3.13"
 
 [dependency-groups]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=1.0",
+]
 dev = [
+    {include-group = "test"},
     "homeassistant>=2025.2",
     "pre-commit>=4.0",
-    "pytest>=8.0",
-    "pytest-homeassistant-custom-component>=0.13",
     "ruff>=0.9",
 ]
 
@@ -53,6 +56,7 @@ max-complexity = 15
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source = ["custom_components/meteoam"]

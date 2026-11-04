@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Location",
+        "description": "Meteo Aeronautica Militare",
+        "data": {
+          "name": "Name",
+          "latitude": "Latitude",
+          "longitude": "Longitude"
+        }
+      }
+    },
+    "error": {
+      "already_configured": "This location is already configured"
+    },
+    "abort": {
+      "no_home": "No home coordinates are set in the Home Assistant configuration",
+      "already_configured": "This location is already configured"
+    }
+  },
+  "exceptions": {
+    "update_failed": {
+      "message": "Update of data from MeteoAM failed: {error}"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Location",
+        "data": {
+          "name": "Name",
+          "latitude": "Latitude",
+          "longitude": "Longitude"
+        }
+      }
+    }
+  }
+}
