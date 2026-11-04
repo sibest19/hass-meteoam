@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -141,14 +142,40 @@ async def test_weather_lifecycle(hass, source):
     assert hass.states.get(entity_id).state == "unavailable"
 
 
-async def test_translations(hass):
+@pytest.mark.parametrize(
+    ("language", "latitude", "name"),
+    [("en", "Latitude", "Name"), ("it", "Latitudine", "Nome")],
+)
+async def test_translations(hass, language, latitude, name):
     """HA loads literal form labels and the translated update error."""
     for category, key, expected in (
-        ("config", "step.user.data.latitude", "Latitude"),
-        ("options", "step.init.data.name", "Name"),
+        ("config", "step.user.data.latitude", latitude),
+        ("options", "step.init.data.name", name),
         ("exceptions", "update_failed.message", "{error}"),
     ):
-        translations = await async_get_translations(hass, "en", category, {"meteoam"})
+        translations = await async_get_translations(
+            hass, language, category, {"meteoam"}
+        )
         value = translations[f"component.meteoam.{category}.{key}"]
         assert expected in value
         assert all("[%key:" not in text for text in translations.values())
+
+
+def test_translation_keys_match():
+    """Every language defines exactly the English keys."""
+    folder = Path(__file__).parent.parent / "custom_components/meteoam/translations"
+
+    def keys(data, prefix=""):
+        return {
+            k
+            for key, value in data.items()
+            for k in (
+                keys(value, f"{prefix}{key}.")
+                if isinstance(value, dict)
+                else [prefix + key]
+            )
+        }
+
+    english = keys(json.loads((folder / "en.json").read_text()))
+    for path in folder.glob("*.json"):
+        assert keys(json.loads(path.read_text())) == english, path.name

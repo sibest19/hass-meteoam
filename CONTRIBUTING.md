@@ -44,7 +44,7 @@ Keep compatibility with **Home Assistant 2025.2.0**. CI runs on pull requests, d
 | 2026.10.4 | 3.14 | HACS before the Marketplace transition |
 | 2026.11.0 | 3.14 | Built-in Marketplace |
 
-Tests use real Home Assistant setup, config flows, registries and weather services. They cover options changes, home tracking, reload/unload, ID and custom-name retention, and English translations. External weather responses are mocked, and network discovery is disabled.
+Tests use real Home Assistant setup, config flows, registries and weather services. They cover options changes, home tracking, reload/unload, ID and custom-name retention, and English and Italian translations. External weather responses are mocked, and network discovery is disabled.
 
 To reproduce an exact target in a separate environment:
 
@@ -62,7 +62,7 @@ Runtime tests do not replace a full HACS-to-Marketplace migration rehearsal. In 
 
 ## Code and pull requests
 
-Integration code lives in `custom_components/meteoam/`; tests live in `tests/`. Weather condition and API field mappings are in `const.py`, API fetching and parsing are in `coordinator.py`, and finished English UI strings belong in `translations/en.json`.
+Integration code lives in `custom_components/meteoam/`; tests live in `tests/`. Weather condition and API field mappings are in `const.py`, API fetching and parsing are in `coordinator.py`, and finished UI strings belong in `translations/en.json` and `translations/it.json` (keep their keys identical).
 
 1. Keep changes focused and preserve existing entity IDs and configuration unless a migration is necessary.
 2. Add tests for changed behavior, including the minimum HA version when using new HA APIs.
