@@ -5,7 +5,8 @@
 # so whatever this writes (plus any manual edits) is what users see.
 #
 # Dispatched by prepare-release.yml: PRs opened with GITHUB_TOKEN do not fire
-# pull_request events, so this cannot trigger on the PR itself.
+# pull_request events, so this cannot trigger on the PR itself. The PR opens
+# as a draft and this workflow marks it ready once the notes are in place.
 on:
   workflow_dispatch:
     inputs:
@@ -28,10 +29,15 @@ tools:
   github:
     toolsets: [default]
 
+# Both writes are pinned to the dispatched PR, so text the agent reads in
+# other PRs cannot redirect them.
 safe-outputs:
   update-pull-request:
-    target: "*" # dispatch has no triggering PR; the agent passes pr_number
+    target: ${{ github.event.inputs.pr_number }}
     title: false
+    max: 1
+  mark-pull-request-as-ready-for-review:
+    target: ${{ github.event.inputs.pr_number }}
     max: 1
 
 timeout-minutes: 15
@@ -57,8 +63,10 @@ integration, then replace the PR body with them.
 ## Breaking or regular
 
 The release is **breaking** if the bump type is `major`
-(it is `${{ github.event.inputs.bump_type }}`) **or** the raw changelog has a
-`### Breaking Changes` section. Otherwise it is **regular**.
+(it is `${{ github.event.inputs.bump_type }}`) **or** the PR body has a
+breaking section: `### Breaking Changes` in a raw changelog, or
+`## ⚠️ Breaking changes` / a `[!WARNING]` banner if a previous run already
+rewrote it. Otherwise it is **regular**.
 
 ## Write the notes
 
@@ -88,6 +96,9 @@ filler, nothing that is not in the changelog or the PRs behind it.
 
 ## Output
 
-Call `update_pull_request` once with `pull_request_number`
-${{ github.event.inputs.pr_number }}, `operation: replace`, and the full notes
-as `body`. Do not change the title.
+1. Call `update_pull_request` once with `pull_request_number`
+   ${{ github.event.inputs.pr_number }}, `operation: replace`, and the full
+   notes as `body`. Do not change the title.
+2. Then call `mark_pull_request_as_ready_for_review` for the same PR, with
+   `reason: Release notes rewritten.` It opens
+   as a draft so it cannot be merged (and published) with the raw changelog.

@@ -92,7 +92,10 @@ jobs:
           git push origin "$BRANCH"
 
           printf '%s' "$RELEASE_NOTES" > release_notes.md
+          # Draft until release-notes rewrites the body and marks it ready, so the
+          # raw changelog cannot be merged and published by mistake
           PR_URL=$(gh pr create \
+            --draft \
             --base main \
             --head "$BRANCH" \
             --title "${PREFIX}: v${VERSION}" \
