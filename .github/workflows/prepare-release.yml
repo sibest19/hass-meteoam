@@ -23,6 +23,7 @@ on:
           - beta
 
 permissions:
+  actions: write # dispatch the release-notes agentic workflow
   contents: write
   pull-requests: write
 
@@ -91,8 +92,16 @@ jobs:
           git push origin "$BRANCH"
 
           printf '%s' "$RELEASE_NOTES" > release_notes.md
-          gh pr create \
+          # Draft until release-notes rewrites the body and marks it ready, so the
+          # raw changelog cannot be merged and published by mistake
+          PR_URL=$(gh pr create \
+            --draft \
             --base main \
             --head "$BRANCH" \
             --title "${PREFIX}: v${VERSION}" \
-            --body-file release_notes.md
+            --body-file release_notes.md)
+
+          # Rewrites the raw changelog in the PR body into user-facing notes
+          gh workflow run release-notes.lock.yml \
+            -f pr_number="${PR_URL##*/}" \
+            -f bump_type="${{ steps.prep.outputs.bump_type }}"
