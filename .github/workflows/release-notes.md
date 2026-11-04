@@ -29,12 +29,16 @@ tools:
   github:
     toolsets: [default]
 
-# Both writes are pinned to the dispatched PR, so text the agent reads in
+# All writes are pinned to the dispatched PR, so text the agent reads in
 # other PRs cannot redirect them.
 safe-outputs:
   update-pull-request:
     target: ${{ github.event.inputs.pr_number }}
     title: false
+    footer: false # the body becomes the public release notes; attribution goes in the comment
+    max: 1
+  add-comment:
+    target: ${{ github.event.inputs.pr_number }}
     max: 1
   mark-pull-request-as-ready-for-review:
     target: ${{ github.event.inputs.pr_number }}
@@ -102,3 +106,5 @@ filler, nothing that is not in the changelog or the PRs behind it.
 2. Then call `mark_pull_request_as_ready_for_review` for the same PR, with
    `reason: Release notes rewritten.` It opens
    as a draft so it cannot be merged (and published) with the raw changelog.
+3. Call `add_comment` on the same PR with one line: whether you classified
+   the release as breaking or regular, and why.
