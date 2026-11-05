@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from collections.abc import Callable, Mapping
 from datetime import date, timedelta
 from random import randrange
@@ -21,8 +22,9 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
+from homeassistant.util.location import distance
 
-from .const import CONF_TRACK_HOME, DOMAIN
+from .const import CONF_TRACK_HOME, DOMAIN, STATION_URL
 
 _MAX_ATTEMPTS = 3
 _RETRY_DELAY_S = 2
@@ -59,6 +61,7 @@ class MeteoAMDataUpdateCoordinator(DataUpdateCoordinator["MeteoAMWeatherData"]):
     def __init__(self, hass: HomeAssistant, config_entry: MeteoAMConfigEntry) -> None:
         """Initialize global MeteoAM data updater."""
         self._unsub_track_home: Callable[[], None] | None = None
+        self.station: MeteoAMStationCoordinator | None = None
         self.weather = MeteoAMWeatherData(hass, config_entry.data)
         self.weather.set_coordinates()
 
@@ -125,6 +128,8 @@ class MeteoAMDataUpdateCoordinator(DataUpdateCoordinator["MeteoAMWeatherData"]):
 class MeteoAMWeatherData:
     """Keep data for MeteoAM weather entities."""
 
+    url = URL
+
     def __init__(self, hass: HomeAssistant, config: Mapping[str, Any]) -> None:
         """Initialise the weather entity data."""
         self.hass = hass
@@ -164,7 +169,7 @@ class MeteoAMWeatherData:
             msg = "Session not initialized"
             raise RuntimeError(msg)
 
-        url = URL.format(
+        url = self.url.format(
             lat=self._coordinates["lat"],
             lon=self._coordinates["lon"],
         )
@@ -192,7 +197,7 @@ class MeteoAMWeatherData:
 
         try:
             self._parse_data(data)
-        except (KeyError, IndexError, TypeError) as err:
+        except (KeyError, IndexError, TypeError, ValueError, AttributeError) as err:
             raise CannotConnectError(
                 f"Error processing MeteoAM API data: {err}"
             ) from err
@@ -267,3 +272,83 @@ class MeteoAMWeatherData:
             if tpp is not None:
                 element["tpp"] = tpp
             self.daily_forecast.append(element)
+
+
+class MeteoAMStationData(MeteoAMWeatherData):
+    """Read observations using the forecast client's transport and coordinates."""
+
+    url = STATION_URL
+
+    def _parse_data(self, data: dict[str, Any]) -> None:
+        """Select the nearest station with a usable report from the last 3 hours."""
+        now = dt_util.utcnow()
+        candidates = []
+        for index, point in enumerate(data["pointlist"]):
+            times = data["timeseries"][index]
+            reports = data["datasets"].get(str(index), {})
+            for tidx, timestamp in enumerate(times):
+                observed_at = dt_util.parse_datetime(timestamp)
+                if observed_at is None or observed_at.tzinfo is None:
+                    continue
+                if not timedelta(0) <= now - observed_at <= timedelta(hours=3):
+                    continue
+                observation = {
+                    param: reports.get(str(pidx), {}).get(str(tidx))
+                    for pidx, param in enumerate(data["paramlist"])
+                }
+                for param in ("2t", "r", "pmsl", "wkmh", "wdir"):
+                    value = _to_float_or_none(observation.get(param))
+                    observation[param] = (
+                        value if value is not None and math.isfinite(value) else None
+                    )
+                if observation.get("wcar") in ("-", ""):
+                    observation["wcar"] = None
+                if observation["2t"] is None:
+                    continue
+                # Each report stays intact; never fill gaps from older reports.
+                candidates.append(
+                    (
+                        distance(
+                            float(self._coordinates["lat"]),
+                            float(self._coordinates["lon"]),
+                            *point,
+                        ),
+                        index,
+                        observed_at,
+                        observation,
+                    )
+                )
+                break
+        if not candidates:
+            raise CannotConnectError(
+                "No nearby station has observations from the last 3 hours"
+            )
+        station_distance, index, observed_at, observation = min(
+            candidates, key=lambda item: item[0]
+        )
+        station_attributes = {
+            "station_name": data["extrainfo"]["station_name"][index],
+            "station_icao": data["extrainfo"]["station_icao"][index],
+            "station_distance_km": round(station_distance / 1000, 1),
+            "observed_at": observed_at.isoformat(),
+        }
+        self.current_weather_data = observation
+        self.station_attributes = station_attributes
+
+
+class MeteoAMStationCoordinator(MeteoAMDataUpdateCoordinator):
+    """Poll observations independently, sharing retry and home tracking behavior."""
+
+    def __init__(self, hass: HomeAssistant, config_entry: MeteoAMConfigEntry) -> None:
+        """Initialize the observation updater without fetching forecasts."""
+        self._unsub_track_home = None
+        self.weather = MeteoAMStationData(hass, config_entry.data)
+        self.weather.set_coordinates()
+        DataUpdateCoordinator.__init__(
+            self,
+            hass,
+            _LOGGER,
+            config_entry=config_entry,
+            name=f"{DOMAIN}_station",
+            update_interval=timedelta(minutes=10),
+        )

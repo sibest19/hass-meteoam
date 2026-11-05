@@ -37,6 +37,8 @@ When upgrading Home Assistant to 2026.11, HACS migrates to Marketplace automatic
 2. Enter a name, latitude and longitude. Coordinates default to your home location. Add the integration again for each additional location.
 3. Add the resulting weather entity to a dashboard weather card. Use the integration’s **Configure** button to change the name or coordinates later.
 
+Enable **station observations** during setup or through **Configure** to add six observation sensors. These use the nearest station returned by MeteoAM with a usable temperature report from the last three hours, checked every ten minutes. Sensor attributes show station name, ICAO code, distance and report time. Missing measurements remain unknown; if no recent station is available, observation sensors become unavailable while forecasts continue normally. Disabling observations stops polling and leaves their registered entities unavailable, retaining their IDs for re-enabling. These are nearby station measurements, not measurements at your exact coordinates.
+
 Temperature is reported in °C, pressure in hPa, wind speed in km/h and precipitation probability in percent. Home Assistant handles display-unit conversion. Daily precipitation probability is the highest hourly value available for that day.
 
 ## Contributing

@@ -7,7 +7,11 @@
         "data": {
           "name": "Nome",
           "latitude": "Latitudine",
-          "longitude": "Longitudine"
+          "longitude": "Longitudine",
+          "station_observations": "Abilita osservazioni dalle stazioni"
+        },
+        "data_description": {
+          "station_observations": "Aggiunge sensori dalla stazione più vicina con un rapporto delle ultime 3 ore. Controllo ogni 10 minuti; le previsioni restano invariate."
         }
       }
     },
@@ -31,8 +35,34 @@
         "data": {
           "name": "Nome",
           "latitude": "Latitudine",
-          "longitude": "Longitudine"
+          "longitude": "Longitudine",
+          "station_observations": "Abilita osservazioni dalle stazioni"
+        },
+        "data_description": {
+          "station_observations": "Aggiunge sensori dalla stazione più vicina con un rapporto delle ultime 3 ore. Controllo ogni 10 minuti; le previsioni restano invariate."
         }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "observed_temperature": {
+        "name": "Temperatura osservata"
+      },
+      "observed_humidity": {
+        "name": "Umidità osservata"
+      },
+      "observed_pressure": {
+        "name": "Pressione osservata"
+      },
+      "observed_wind_speed": {
+        "name": "Velocità del vento osservata"
+      },
+      "observed_wind_bearing": {
+        "name": "Direzione del vento osservata"
+      },
+      "observed_wind_cardinal": {
+        "name": "Direzione cardinale del vento osservata"
       }
     }
   }

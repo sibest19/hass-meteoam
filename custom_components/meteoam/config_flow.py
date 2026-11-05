@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
+    CONF_STATION_OBSERVATIONS,
     CONF_TRACK_HOME,
     DEFAULT_HOME_LATITUDE,
     DEFAULT_HOME_LONGITUDE,
@@ -47,6 +48,12 @@ def _get_data_schema(
     if config_entry is None or config_entry.data.get(CONF_TRACK_HOME, False):
         return vol.Schema(
             {
+                vol.Optional(
+                    CONF_STATION_OBSERVATIONS,
+                    default=config_entry.data.get(CONF_STATION_OBSERVATIONS, False)
+                    if config_entry
+                    else False,
+                ): bool,
                 vol.Required(CONF_NAME, default=HOME_LOCATION_NAME): str,
                 vol.Required(CONF_LATITUDE, default=hass.config.latitude): cv.latitude,
                 vol.Required(
@@ -57,6 +64,10 @@ def _get_data_schema(
     # Not tracking home, default values come from config entry
     return vol.Schema(
         {
+            vol.Optional(
+                CONF_STATION_OBSERVATIONS,
+                default=config_entry.data.get(CONF_STATION_OBSERVATIONS, False),
+            ): bool,
             vol.Required(CONF_NAME, default=config_entry.data.get(CONF_NAME)): str,
             vol.Required(
                 CONF_LATITUDE, default=config_entry.data.get(CONF_LATITUDE)
