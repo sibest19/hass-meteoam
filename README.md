@@ -15,6 +15,8 @@ Weather conditions and forecasts from the Italian Air Force meteorological servi
 
 ## Installation
 
+[![Open MeteoAM in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=sibest19&repository=hass-meteoam&category=integration)
+
 ### Home Assistant 2026.11 or newer
 
 Open **Settings → Marketplace**, accept the community software notice, and install **Meteo Aeronautica Militare (MeteoAM)**. First installation opens setup directly; updates to an already loaded integration require a restart.
